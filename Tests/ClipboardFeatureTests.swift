@@ -1121,11 +1121,12 @@ enum ClipboardFeatureTests {
         suite.expect(largeCardPreview.hasSuffix("…")
                 && largeCardPreview.count <= ClipboardHistoryEditing.previewCharacters + 1,
                "a card keeps very large text previews bounded too")
-        suite.expect(Defaults.allowedClipboardHistoryLimits == [20, 50, 100, 250, 500, 1_000, 10_000, 0],
+        suite.expect(Defaults.allowedClipboardHistoryLimits == [20, 30, 50, 100, 250, 500, 1_000, 10_000, 0],
                "clipboard history limits include 10k and unlimited options")
         suite.expect(Defaults.sanitizedClipboardHistoryLimit(10_000) == 10_000
                 && Defaults.sanitizedClipboardHistoryLimit(0) == 0
                 && Defaults.sanitizedClipboardHistoryLimit(50) == 50
+                && Defaults.sanitizedClipboardHistoryLimit(30) == 30
                 && Defaults.sanitizedClipboardHistoryLimit(-99) == 50,
                "sanitized clipboard history limits accept 10k and 0 (unlimited)")
         let unlimitedHistory = ClipboardHistoryEditing.retainedEntries(

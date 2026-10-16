@@ -1161,7 +1161,7 @@ enum Defaults {
     static let allowedMenuBarMemoryStyles = ["dot", "percent", "both"]
     static let allowedMonitorMemoryMetrics = ["used", "app"]
     static let allowedPreviewSizes = ["small", "normal", "large", "xlarge"]
-    static let allowedClipboardHistoryLimits = [20, 50, 100, 250, 500, 1_000, 10_000, 0]
+    static let allowedClipboardHistoryLimits = [20, 30, 50, 100, 250, 500, 1_000, 10_000, 0]
     static let allowedClipboardAutoClearDelayRange = 5...3_600
     static let defaultClipboardAutoClearDelay = 20
     static let allowedClipboardMenuBarPreviewLengthRange = 5...50
