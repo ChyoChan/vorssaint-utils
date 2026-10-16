@@ -117,6 +117,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate, NSW
             self?.captureStatusClick()
             self?.showMetricPanel(for: metric, anchoredTo: button)
         }
+        statusController.onKeepAwakeClick = { [weak self] button in
+            self?.captureStatusClick()
+            self?.showKeepAwakePanel(anchoredTo: button)
+        }
         statusController.onClipboardPreviewClick = {
             // No captureStatusClick() here, unlike the other click handlers:
             // it only ever helps anchor the main popover to a status item,
@@ -478,6 +482,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate, NSW
 
     func isOverStatusItem(_ point: NSPoint) -> Bool {
         statusController?.containsStatusItem(at: point) == true
+    }
+
+    private func showKeepAwakePanel(anchoredTo button: NSStatusBarButton) {
+        guard AppFeature.keepAwake.isAvailable else { return }
+        // A dedicated item stays anchored to its own button even when the
+        // main panel is routed through Dynamic Island.
+        metricAnchorSwitchSerial &+= 1
+        if popoverIsOpen {
+            let samePanel = MenuPanelFocus.shared.request?.target == .keepAwake
+            closePopover(animated: false, reason: .statusItem)
+            if samePanel { return }
+        }
+        MenuPanelFocus.shared.showKeepAwakePanel()
+        showPopover(anchor: button)
     }
 
     private func showMetricPanel(for metric: MenuBarMetric, anchoredTo button: NSStatusBarButton) {

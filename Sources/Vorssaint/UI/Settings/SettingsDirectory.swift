@@ -191,6 +191,7 @@ enum SettingsDirectory {
                 SettingsDirectoryItem(page: .energy, title: s.tabEnergy, icon: "bolt.fill",
                                        featureKeywords: [
                                         (.keepAwake, [s.keepAwakeTitle, s.clamshellTitle,
+                                                      FeatureStrings.keepAwakeMenuBar(language).separateItem,
                                                       s.defaultDurationLabel, s.showCountdown,
                                                       s.keepAwakeActiveIconLabel,
                                                       s.keepAwakeActiveIconCoffee,

@@ -28,6 +28,7 @@ struct EnergySettings: View {
     @AppStorage(DefaultsKey.batteryLimit) private var batteryLimit = 10
     @AppStorage(DefaultsKey.keepAwakeAutoStart) private var keepAwakeAutoStart = false
     @AppStorage(DefaultsKey.keepAwakeRightClickToggle) private var keepAwakeRightClickToggle = false
+    @AppStorage(DefaultsKey.keepAwakeSeparateMenuBarItem) private var keepAwakeSeparateMenuBarItem = false
     @AppStorage(DefaultsKey.keepAwakeAllowDisplaySleep) private var keepAwakeAllowDisplaySleep = false
     @AppStorage(DefaultsKey.keepAwakePauseWhenLocked) private var keepAwakePauseWhenLocked = false
     @AppStorage(DefaultsKey.keepAwakeAutomationRequireAll) private var keepAwakeAutomationRequireAll = false
@@ -217,6 +218,11 @@ struct EnergySettings: View {
     /// Everything else Keep Awake can do, one row each.
     private var keepAwakeOptionsCard: some View {
         SettingsCard(title: l10n.s.keepAwakeOptions) {
+            let menuBarStrings = FeatureStrings.keepAwakeMenuBar(l10n.language)
+            SettingsRow(symbol: "cup.and.saucer", title: menuBarStrings.separateItem,
+                        caption: menuBarStrings.separateItemCaption) {
+                Toggle(menuBarStrings.separateItem, isOn: $keepAwakeSeparateMenuBarItem).labelsHidden()
+            }
             SettingsRow(symbol: "play.circle", title: l10n.s.keepAwakeAutoStart,
                         caption: l10n.s.keepAwakeAutoStartCaption) {
                 Toggle(l10n.s.keepAwakeAutoStart, isOn: $keepAwakeAutoStart).labelsHidden()

@@ -16,6 +16,7 @@ struct MenuPanelFocusRequest: Equatable {
 
 enum MenuPanelFocusTarget: Equatable {
     case normal
+    case keepAwake
     case section(PanelSectionID)
     case metric(MetricDetailKind)
 }
@@ -35,6 +36,12 @@ final class MenuPanelFocus: ObservableObject {
         serial += 1
         activeMetric = nil
         request = MenuPanelFocusRequest(target: .normal, serial: serial)
+    }
+
+    func showKeepAwakePanel() {
+        serial += 1
+        activeMetric = nil
+        request = MenuPanelFocusRequest(target: .keepAwake, serial: serial)
     }
 
     func focus(_ section: PanelSectionID) {
@@ -88,6 +95,8 @@ struct MenuPanelView: View {
     @AppStorage(DefaultsKey.panelSectionOrder) private var sectionOrderRaw = ""
     @State private var navigableContentHeight: CGFloat = 0
     @State private var metricContentHeight: CGFloat = 0
+    @State private var keepAwakeContentHeight: CGFloat = 0
+    @State private var showingKeepAwakeOnly = false
     @State private var updateBannerHeight: CGFloat = 0
     @State private var selectedSection: PanelSectionID = PanelLayout.order.first ?? .keepAwake
     @State private var selectedMetric: MetricDetailKind?
@@ -110,6 +119,8 @@ struct MenuPanelView: View {
         Group {
             if let notchSize {
                 embeddedPanel(size: notchSize)
+            } else if showingKeepAwakeOnly {
+                keepAwakePanel
             } else if selectedMetric != nil {
                 metricPanel
             } else {
@@ -146,6 +157,7 @@ struct MenuPanelView: View {
     }
 
     private var monitorNeeds: SystemMonitorPanelNeeds {
+        if showingKeepAwakeOnly { return .none }
         if let selectedMetric {
             return selectedMetric.monitorNeeds
         }
@@ -164,8 +176,12 @@ struct MenuPanelView: View {
 
     private func applyFocus(_ request: MenuPanelFocusRequest?) {
         guard let request else { return }
+        showingKeepAwakeOnly = request.target == .keepAwake
         switch request.target {
         case .normal:
+            selectedMetric = nil
+        case .keepAwake:
+            focusedSection = nil
             selectedMetric = nil
         case .section(let section):
             guard isSectionVisible(section) else { return }
@@ -224,6 +240,34 @@ struct MenuPanelView: View {
         .padding(12)
         .frame(width: 332, height: navigablePanelHeight)
         .panelGlassSurface()
+    }
+
+    /// A direct entry point, independent of the main panel's hidden sections.
+    /// The same card owns the switch, duration chips and advanced options.
+    private var keepAwakePanel: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            UpdateBanner()
+                .reportHeight($updateBannerHeight)
+            header
+            OverlayScrollView(measuredHeight: $keepAwakeContentHeight) {
+                if AppFeature.keepAwake.isAvailable {
+                    KeepAwakeCard(collapsible: false)
+                        .frame(width: 308)
+                }
+            }
+            .frame(width: 308, height: keepAwakeScrollHeight)
+            footer
+        }
+        .padding(12)
+        .frame(width: 332, height: min(maxHeight, max(220, keepAwakeScrollHeight + keepAwakeChromeHeight)))
+        .panelGlassSurface()
+    }
+
+    private var keepAwakeChromeHeight: CGFloat { navigableChromeHeight - 46 }
+
+    private var keepAwakeScrollHeight: CGFloat {
+        let measured = keepAwakeContentHeight == 0 ? 250 : keepAwakeContentHeight
+        return min(measured, max(80, maxHeight - keepAwakeChromeHeight))
     }
 
     private var metricPanel: some View {
@@ -462,7 +506,11 @@ struct MenuPanelView: View {
                          horizontalPadding: 7) {
                 // The hosted utility's own page, or the general one from the
                 // panel's lists: the router is sticky, so it is set every time.
-                SettingsRouter.shared.page = PanelInteractionState.shared.hostedSettingsPage ?? .general
+                if showingKeepAwakeOnly {
+                    SettingsRouter.shared.request(FeatureSettingsDestination(.energy, sectionAnchor: .keepAwake))
+                } else {
+                    SettingsRouter.shared.page = PanelInteractionState.shared.hostedSettingsPage ?? .general
+                }
                 appDelegate()?.openSettingsWindow()
             }
 

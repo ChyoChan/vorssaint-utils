@@ -12,6 +12,7 @@ final class StatusItemController {
     /// while the main item is out of the bar.
     var onRightClick: ((NSStatusBarButton?) -> Void)?
     var onMetricClick: ((MenuBarMetric, NSStatusBarButton) -> Void)?
+    var onKeepAwakeClick: ((NSStatusBarButton) -> Void)?
     var onClipboardPreviewClick: (() -> Void)?
 
     private(set) var statusItem: NSStatusItem!
@@ -20,6 +21,8 @@ final class StatusItemController {
     /// MenuBarMetric, since its content comes from ClipboardHistoryService
     /// rather than a SystemSnapshot reading.
     private var clipboardPreviewStatusItem: NSStatusItem?
+    private var keepAwakeStatusItem: NSStatusItem?
+    private var lastKeepAwakeIconStateKey = ""
     private var metricStatusItems: [String: NSStatusItem] = [:]
     private var metricStatusItemFocus: [String: MenuBarMetric] = [:]
     private var cancellables = Set<AnyCancellable>()
@@ -82,7 +85,7 @@ final class StatusItemController {
     var button: NSStatusBarButton? { statusItem.button }
 
     func containsStatusItem(at screenPoint: NSPoint) -> Bool {
-        let items = [statusItem, clipboardPreviewStatusItem].compactMap { $0 } + Array(metricStatusItems.values)
+        let items = [statusItem, clipboardPreviewStatusItem, keepAwakeStatusItem].compactMap { $0 } + Array(metricStatusItems.values)
         // A hidden item keeps its last frame, which another app's item may
         // occupy by now.
         let buttons = items.filter(\.isVisible).compactMap(\.button)
@@ -314,15 +317,21 @@ final class StatusItemController {
         heldMicBadgeActive ?? currentMicBadgeActive
     }
 
+    private var usesSeparateKeepAwakeItem: Bool {
+        KeepAwakeMenuBarSupport.showsSeparateItem(
+            featureAvailable: AppFeature.keepAwake.isAvailable,
+            optionEnabled: UserDefaults.standard.bool(forKey: DefaultsKey.keepAwakeSeparateMenuBarItem))
+    }
+
     private var currentKeepAwakeSignal: Bool {
-        MenuBarSpacingSupport.keepAwakeSignals(active: KeepAwakeManager.shared.isActive,
+        !usesSeparateKeepAwakeItem && MenuBarSpacingSupport.keepAwakeSignals(active: KeepAwakeManager.shared.isActive,
                                                tint: .current, style: .current)
     }
 
     /// Whether a running Keep Awake session brings back the glyph the
     /// metrics option hides. Held with the mic badge while a panel is open.
     private var keepAwakeSignal: Bool {
-        heldKeepAwakeSignal ?? currentKeepAwakeSignal
+        !usesSeparateKeepAwakeItem && (heldKeepAwakeSignal ?? currentKeepAwakeSignal)
     }
 
     /// Keeps the variable-width mic badge, and whether Keep Awake brings the
@@ -384,7 +393,9 @@ final class StatusItemController {
                 renderedTitleLength: button.attributedTitle.length,
                 mustShowForSignal: signal || keepAwakeSignal)
         mainItemHiddenByChoice = mainItemHidden
-        let keepAwakeActive = KeepAwakeManager.shared.isActive
+        let keepAwakeActive = KeepAwakeMenuBarSupport.mainItemIsActive(
+            sessionActive: KeepAwakeManager.shared.isActive,
+            separateItemShown: usesSeparateKeepAwakeItem)
 
         // refresh() runs on every monitor tick and lands here; re-rendering
         // the same image every 2 seconds would be wasted composition, so the
@@ -425,12 +436,11 @@ final class StatusItemController {
         }
     }
 
-    /// The item a right-click menu opens from: the main one while it is in
-    /// the bar, otherwise the item that was clicked. A menu set on an item
-    /// that is out of the bar has nowhere on screen to open from.
+    /// A right-click menu opens from the item that was actually clicked,
+    /// including the standalone Keep Awake item when the main icon is visible.
     func menuHost(for button: NSStatusBarButton?) -> NSStatusItem {
-        guard !statusItem.isVisible, let button else { return statusItem }
-        let others = [clipboardPreviewStatusItem].compactMap { $0 } + Array(metricStatusItems.values)
+        guard let button else { return statusItem }
+        let others = [clipboardPreviewStatusItem, keepAwakeStatusItem].compactMap { $0 } + Array(metricStatusItems.values)
         return others.first { $0.button === button } ?? statusItem
     }
 
@@ -459,6 +469,11 @@ final class StatusItemController {
         let snapshot = SystemMonitor.shared.snapshot
         let metrics = MenuBarMetric.enabled(in: defaults)
         let separateMetrics = defaults.bool(forKey: DefaultsKey.menuBarSeparateMetrics)
+        let countdown = KeepAwakeMenuBarSupport.countdown(
+            sessionActive: manager.isActive,
+            showsCountdown: defaults.bool(forKey: DefaultsKey.showCountdown),
+            endDate: manager.endDate)
+        syncKeepAwakeStatusItem(countdown: countdown)
 
         syncTitleTimer(keepAwakeActive: manager.isActive,
                        showsCountdown: defaults.bool(forKey: DefaultsKey.showCountdown),
@@ -469,16 +484,7 @@ final class StatusItemController {
         // carry its green/yellow/red color; all other runs stay adaptive.
         let title = NSMutableAttributedString()
         var includesCountdown = false
-        if manager.isActive, defaults.bool(forKey: DefaultsKey.showCountdown) {
-            let countdown: String
-            if let end = manager.endDate {
-                let remaining = max(0, Int(end.timeIntervalSinceNow))
-                let hours = remaining / 3600
-                let minutes = (remaining % 3600) / 60
-                countdown = hours > 0 ? String(format: "%d:%02d", hours, minutes) : "\(max(minutes, 1)) min"
-            } else {
-                countdown = "∞"
-            }
+        if !usesSeparateKeepAwakeItem, !countdown.isEmpty {
             title.append(NSAttributedString(string: countdown))
             includesCountdown = true
         }
@@ -562,27 +568,88 @@ final class StatusItemController {
             }
         }
 
-        let toolTip: String
-        if manager.isActive {
-            if manager.sessionTrigger == .automation {
-                toolTip = FeatureStrings.keepAwakeAutomation(L10n.shared.language)
-                    .activeStatus(for: manager.activeAutomationConditions)
-            } else if let end = manager.endDate {
-                toolTip = "\(strings.statusActiveUntil) \(Self.timeFormatter.string(from: end))"
-            } else {
-                toolTip = strings.statusActiveIndefinite
-            }
-        } else {
-            toolTip = strings.statusIdleTooltip
-        }
-        if button.toolTip != toolTip {
-            button.toolTip = toolTip
+        let toolTip = keepAwakeTooltip()
+        let mainToolTip = usesSeparateKeepAwakeItem
+            ? (Bundle.main.object(forInfoDictionaryKey: "CFBundleDisplayName") as? String ?? "Vorssaint")
+            : toolTip
+        if button.toolTip != mainToolTip {
+            button.toolTip = mainToolTip
         }
 
         // The icon decision depends on the title just written (the glyph may
         // hide only while metrics actually render), so it re-runs here — the
         // one place where title and icon can never get out of step.
         updateIconAppearance()
+    }
+
+    private func keepAwakeTooltip() -> String {
+        let manager = KeepAwakeManager.shared
+        let strings = L10n.shared.s
+        if manager.isActive {
+            if manager.sessionTrigger == .automation {
+                return FeatureStrings.keepAwakeAutomation(L10n.shared.language)
+                    .activeStatus(for: manager.activeAutomationConditions)
+            } else if let end = manager.endDate {
+                return "\(strings.statusActiveUntil) \(Self.timeFormatter.string(from: end))"
+            } else {
+                return strings.statusActiveIndefinite
+            }
+        }
+        return strings.statusIdleTooltip
+    }
+
+    private func syncKeepAwakeStatusItem(countdown: String) {
+        guard usesSeparateKeepAwakeItem else {
+            if let item = keepAwakeStatusItem {
+                keepAwakeStatusItem = nil
+                NSStatusBar.system.removeStatusItem(item)
+            }
+            lastKeepAwakeIconStateKey = ""
+            return
+        }
+        let item = keepAwakeStatusItem ?? installKeepAwakeStatusItem()
+        guard let button = item.button else { return }
+        let active = KeepAwakeManager.shared.isActive
+        let stateKey = "\(active)|\(KeepAwakeIconTint.current.rawValue)"
+        if lastKeepAwakeIconStateKey != stateKey {
+            lastKeepAwakeIconStateKey = stateKey
+            button.image = BlackHoleGlyph.keepAwakeImage(active: active, tint: .current)
+        }
+        let title = countdown.isEmpty ? "" : " " + countdown
+        if button.title != title { button.title = title }
+        let position: NSControl.ImagePosition = title.isEmpty ? .imageOnly : .imageLeading
+        if button.imagePosition != position { button.imagePosition = position }
+        let tooltip = "\(L10n.shared.s.keepAwakeTitle): \(keepAwakeTooltip())"
+        if button.toolTip != tooltip {
+            button.toolTip = tooltip
+            button.setAccessibilityLabel(tooltip)
+        }
+    }
+
+    private func installKeepAwakeStatusItem() -> NSStatusItem {
+        let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
+        item.autosaveName = KeepAwakeMenuBarSupport.autosaveName
+        item.behavior = []
+        // Register before showing: AppKit can announce a defaults change
+        // synchronously while it restores the saved placement.
+        keepAwakeStatusItem = item
+        item.isVisible = true
+        if let button = item.button {
+            button.font = MenuBarRenderer.statusFont(stacked: false)
+            button.target = self
+            button.action = #selector(keepAwakeClicked(_:))
+            button.sendAction(on: [.leftMouseUp, .rightMouseUp])
+            button.identifier = NSUserInterfaceItemIdentifier(KeepAwakeMenuBarSupport.autosaveName)
+        }
+        return item
+    }
+
+    @objc private func keepAwakeClicked(_ sender: NSStatusBarButton) {
+        if NSApp.currentEvent?.type == .rightMouseUp {
+            onRightClick?(sender)
+        } else {
+            onKeepAwakeClick?(sender)
+        }
     }
 
     private func refreshMetricStatusItems(metrics: [MenuBarMetric],
@@ -951,6 +1018,13 @@ enum BlackHoleGlyph {
             return source
         }
         return tintedImage(source, color: color) ?? fallback(active: true)
+    }
+
+    /// A fixed canvas and outline/filled pair keep the standalone button
+    /// stable and distinguish its state even when color is disabled.
+    static func keepAwakeImage(active: Bool, tint: KeepAwakeIconTint) -> NSImage? {
+        guard active else { return fixedSizeSymbol(named: "cup.and.saucer", drop: 1) }
+        return activeImage(style: .coffee, tint: tint)
     }
 
     /// System symbols have different natural widths. Center them inside the

@@ -3,6 +3,33 @@
 
 import Foundation
 
+struct KeepAwakeMenuBarStrings {
+    let separateItem: String
+    let separateItemCaption: String
+}
+
+extension FeatureStrings {
+    static func keepAwakeMenuBar(_ language: AppLanguage) -> KeepAwakeMenuBarStrings {
+        switch language {
+        case .enUS: return .init(separateItem: "Separate Keep Awake menu bar icon", separateItemCaption: "Shows a dedicated coffee cup. Click it to open Keep Awake controls; the main app icon stays unchanged.")
+        case .ptBR: return .init(separateItem: "Ícone separado de Manter acordado", separateItemCaption: "Mostra uma xícara própria na barra de menus. Clique para abrir os controles; o ícone principal não muda.")
+        case .tr: return .init(separateItem: "Ayrı Uyanık Tut menü çubuğu simgesi", separateItemCaption: "Ayrı bir kahve fincanı gösterir. Denetimleri açmak için tıklayın; ana uygulama simgesi değişmez.")
+        case .ru: return .init(separateItem: "Отдельный значок режима бодрствования", separateItemCaption: "Показывает отдельную чашку в строке меню. Нажмите для управления; основной значок не меняется.")
+        case .es: return .init(separateItem: "Icono separado de Mantener despierto", separateItemCaption: "Muestra una taza propia en la barra de menús. Haz clic para abrir los controles; el icono principal no cambia.")
+        case .sk: return .init(separateItem: "Samostatná ikona udržiavania bdelosti", separateItemCaption: "Zobrazí samostatnú šálku v lište menu. Kliknutím otvoríte ovládanie; hlavná ikona zostane nezmenená.")
+        case .de: return .init(separateItem: "Separates Wachhalten-Menüleistensymbol", separateItemCaption: "Zeigt eine eigene Kaffeetasse. Ein Klick öffnet die Steuerung; das Hauptsymbol bleibt unverändert.")
+        case .fr: return .init(separateItem: "Icône séparée de maintien en éveil", separateItemCaption: "Affiche une tasse dédiée dans la barre des menus. Cliquez pour ouvrir les commandes ; l’icône principale ne change pas.")
+        case .it: return .init(separateItem: "Icona separata per mantenere attivo il Mac", separateItemCaption: "Mostra una tazza dedicata nella barra dei menu. Fai clic per aprire i controlli; l’icona principale non cambia.")
+        case .ja: return .init(separateItem: "スリープ防止の独立したメニューバーアイコン", separateItemCaption: "専用のコーヒーカップを表示します。クリックすると操作パネルが開き、メインアイコンは変わりません。")
+        case .ko: return .init(separateItem: "잠자기 방지 전용 메뉴 막대 아이콘", separateItemCaption: "별도의 커피잔을 표시합니다. 클릭하면 제어 패널이 열리며 기본 앱 아이콘은 바뀌지 않습니다.")
+        case .zhHans: return .init(separateItem: "独立显示保持唤醒图标", separateItemCaption: "在菜单栏显示独立咖啡杯。点击打开保持唤醒面板，主应用图标保持不变。")
+        case .zhTW: return .init(separateItem: "獨立顯示保持喚醒圖示", separateItemCaption: "在選單列顯示獨立咖啡杯。點擊開啟保持喚醒面板，主 App 圖示保持不變。")
+        case .zhHK: return .init(separateItem: "獨立顯示保持喚醒圖示", separateItemCaption: "在選單列顯示獨立咖啡杯。點擊開啟保持喚醒面板，主 App 圖示保持不變。")
+        case .uk: return .init(separateItem: "Окремий значок режиму неспання", separateItemCaption: "Показує окрему чашку в смузі меню. Натисніть для керування; основний значок не змінюється.")
+        }
+    }
+}
+
 struct KeepAwakeAutomationStrings {
     let automationSection: String
     let automationCaption: String

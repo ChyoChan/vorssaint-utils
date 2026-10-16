@@ -6,6 +6,7 @@ import SwiftUI
 struct KeepAwakeIconPicker: View {
     @ObservedObject private var l10n = L10n.shared
     @AppStorage(DefaultsKey.menuBarIconSymbol) private var menuBarSymbol = ""
+    @AppStorage(DefaultsKey.keepAwakeSeparateMenuBarItem) private var separateMenuBarItem = false
     @Binding var iconValue: String
     @Binding var tintValue: String
     var compact = false
@@ -20,12 +21,14 @@ struct KeepAwakeIconPicker: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: compact ? 7 : 10) {
-            choiceHeader(l10n.s.keepAwakeActiveIconLabel,
-                         value: title(selectedIcon))
+            if !separateMenuBarItem {
+                choiceHeader(l10n.s.keepAwakeActiveIconLabel,
+                             value: title(selectedIcon))
 
-            HStack(spacing: compact ? 5 : 7) {
-                ForEach(KeepAwakeActiveIcon.allCases) { icon in
-                    iconButton(icon)
+                HStack(spacing: compact ? 5 : 7) {
+                    ForEach(KeepAwakeActiveIcon.allCases) { icon in
+                        iconButton(icon)
+                    }
                 }
             }
 

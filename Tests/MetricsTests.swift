@@ -178,6 +178,7 @@ struct MetricsTests {
                 WindowServerCaptureContract.run(suite)
             }),
             ("keep-awake", {
+                KeepAwakeMenuBarTests.run(suite)
                 KeepAwakeCatalogContract.run(suite)
                 MenuPanelToggleLabelContract.run(suite)
                 KeepAwakeLidSleepTests.run { suite.expect($0, $1) }
