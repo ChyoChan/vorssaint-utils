@@ -224,7 +224,7 @@ struct MenuPanelView: View {
         VStack(alignment: .leading, spacing: 12) {
             UpdateBanner()
                 .reportHeight($updateBannerHeight)
-            header
+            if !showsNativeSoundLayout { header }
             sectionNavigation
 
             OverlayScrollView(measuredHeight: $navigableContentHeight) {
@@ -311,11 +311,21 @@ struct MenuPanelView: View {
 
     private var navigableScrollHeight: CGFloat {
         let measured = navigableContentHeight == 0 ? estimatedNavigableContentHeight : navigableContentHeight
-        return min(measured, max(80, maxHeight - navigableChromeHeight))
+        return min(measured, max(80, maxHeight - normalPanelChromeHeight))
     }
 
     private var navigablePanelHeight: CGFloat {
-        min(maxHeight, max(220, navigableScrollHeight + navigableChromeHeight))
+        min(maxHeight, max(220, navigableScrollHeight + normalPanelChromeHeight))
+    }
+
+    private var showsNativeSoundLayout: Bool {
+        activeSection == .mixer && AppFeature.mixer.isAvailable
+    }
+
+    private var normalPanelChromeHeight: CGFloat {
+        // Only the menu-bar sound page omits the 36pt brand header and its
+        // 12pt gap. Metrics, Keep Awake and the island keep their own chrome.
+        navigableChromeHeight - (showsNativeSoundLayout ? 48 : 0)
     }
 
     private var metricScrollHeight: CGFloat {

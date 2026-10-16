@@ -22,6 +22,8 @@ struct MixerSection: View {
     @AppStorage(DefaultsKey.mixerHideInactiveApps)
     private var hideInactiveApps = false
     @State private var optionsExpanded = false
+    @State private var microphoneExpanded = false
+    @State private var systemSoundsExpanded = false
     @State private var normalSliderTint = Color(nsColor: .controlAccentColor)
     @State private var accentRevision = 0
     @State private var lastResolvedAccent: NSColor?
@@ -41,6 +43,8 @@ struct MixerSection: View {
                 SettingsCard(title: l10n.s.mixerSection) {
                     mixerControls
                 }
+            } else if SoundPanelPresentation.usesNativeLayout(settingsMode: settingsMode, inNotch: inNotch) {
+                nativeSoundControls
             } else {
                 PanelSection(.mixer, title: l10n.s.mixerSection, collapsible: collapsible) {
                     mixerControls.panelCard(interactive: false)
@@ -56,6 +60,146 @@ struct MixerSection: View {
         .onAppear { mixer.refreshApps() }
     }
 
+    private var soundText: SoundPanelStrings { FeatureStrings.soundPanel(l10n.language) }
+
+    /// The menu-bar view puts common actions first without changing any routing
+    /// or capture behavior. Settings and the compact island keep their old layout.
+    private var nativeSoundControls: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            nativeMasterVolume
+            Divider()
+            nativeOutputDevices
+            Divider()
+
+            VStack(alignment: .leading, spacing: 2) {
+                VStack(alignment: .leading, spacing: 8) {
+                    Label(soundText.appVolumes, systemImage: "slider.horizontal.3")
+                        .font(.system(size: 13))
+                        .foregroundStyle(.primary)
+                        .accessibilityAddTraits(.isHeader)
+                        .frame(maxWidth: .infinity, minHeight: 28, alignment: .leading)
+                    appVolumeControls
+                }
+                .padding(.bottom, 8)
+                SoundPanelDisclosure(title: l10n.s.mixerInputTitle,
+                                     symbol: "mic", isExpanded: $microphoneExpanded) {
+                    microphonePicker
+                }
+                SoundPanelDisclosure(title: l10n.s.mixerSoundEffectsOutputTitle,
+                                     symbol: "bell", isExpanded: $systemSoundsExpanded) {
+                    systemSoundOutputPicker
+                }
+                SoundPanelDisclosure(title: l10n.s.keepAwakeOptions,
+                                     symbol: "ellipsis.circle", isExpanded: $optionsExpanded) {
+                    MixerOptionsControls()
+                }
+            }
+
+            Divider()
+            Button(soundText.soundSettings) {
+                if let url = URL(string: "x-apple.systempreferences:com.apple.Sound-Settings.extension") {
+                    NSWorkspace.shared.open(url)
+                }
+            }
+            .buttonStyle(.plain)
+            .font(.system(size: 12))
+            .frame(maxWidth: .infinity, minHeight: 24, alignment: .leading)
+        }
+        .padding(.horizontal, 6)
+        .padding(.vertical, 4)
+    }
+
+    private var nativeMasterVolume: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack {
+                Text(soundText.title)
+                    .font(.system(size: 15, weight: .semibold))
+                    .accessibilityAddTraits(.isHeader)
+                Spacer(minLength: 8)
+                if let volume = mixer.systemOutputVolume {
+                    EditableVolumePercent(currentPercent: Int((volume * 100).rounded()),
+                                          maximumPercent: 100, width: 40,
+                                          editorID: "system-output", editingID: $editingVolumeID,
+                                          accessibilityLabel: l10n.s.mixerSystemOutputTitle) {
+                        Text("\(Int((volume * 100).rounded()))%")
+                            .font(.system(size: 12))
+                            .monospacedDigit()
+                            .foregroundStyle(.secondary)
+                    } onCommit: {
+                        setSystemOutputVolume($0)
+                    }
+                }
+            }
+
+            if let volume = mixer.systemOutputVolume {
+                HStack(spacing: 10) {
+                    Image(systemName: mixer.systemOutputMuted == true || volume <= 0.001
+                          ? "speaker.slash.fill" : "speaker.fill")
+                        .frame(width: 18)
+                        .accessibilityHidden(true)
+                    MixerVolumeSlider(value: systemOutputVolumeBinding,
+                                      normalTint: normalSliderTint, boostTint: normalSliderTint,
+                                      isBoosting: false, accentRevision: accentRevision,
+                                      glassEnabled: glassEnabled, maximum: 1,
+                                      accessibilityLabel: l10n.s.mixerSystemOutputTitle)
+                    Image(systemName: "speaker.wave.3.fill")
+                        .frame(width: 22)
+                        .accessibilityHidden(true)
+                }
+                .font(.system(size: 14))
+                .foregroundStyle(.secondary)
+                .frame(minHeight: 24)
+            } else {
+                inputMessage(universalOutputDevices.isEmpty
+                             ? l10n.s.mixerSystemOutputNoDevices : soundText.volumeUnavailable,
+                             systemImage: "speaker.slash")
+            }
+        }
+    }
+
+    private var nativeOutputDevices: some View {
+        VStack(alignment: .leading, spacing: 3) {
+            Text(l10n.s.mixerSystemOutputTitle)
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundStyle(.secondary)
+                .accessibilityAddTraits(.isHeader)
+                .padding(.bottom, 3)
+
+            ForEach(universalOutputDevices) { device in
+                SoundOutputDeviceRow(
+                    name: device.name,
+                    symbol: SoundPanelPresentation.outputSymbol(name: device.name,
+                        isHeadphones: device.isHeadphones, isVirtual: device.priorityTier == .virtual),
+                    isSelected: device.uid == mixer.currentOutputDeviceUID,
+                    currentLabel: l10n.s.mixerOutputCurrent) {
+                        universalOutputSelectionBinding.wrappedValue = device.uid
+                    }
+            }
+            if universalOutputDevices.isEmpty {
+                inputMessage(l10n.s.mixerSystemOutputNoDevices, systemImage: "speaker.slash")
+            } else if !universalOutputDevices.contains(where: { $0.uid == mixer.currentOutputDeviceUID }) {
+                inputMessage(l10n.s.mixerOutputUnavailable, systemImage: "speaker.badge.exclamationmark")
+            }
+            if let outputSwitchError = mixer.outputSwitchError {
+                inputMessage(String(format: l10n.s.mixerSystemOutputErrorFormat, outputSwitchError),
+                             systemImage: "exclamationmark.triangle")
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var appVolumeControls: some View {
+        if !AppVolumeMixer.isSupported {
+            emptyLabel(l10n.s.mixerUnavailable)
+        } else if mixer.needsPermission {
+            permissionHint
+        } else if visibleApps.isEmpty {
+            emptyLabel(l10n.s.mixerEmpty)
+        } else {
+            mixerRows
+        }
+    }
+
     private var mixerControls: some View {
         VStack(alignment: .leading, spacing: 8) {
             audioDevicesSection
@@ -64,15 +208,7 @@ struct MixerSection: View {
                 Divider()
             }
 
-            if !AppVolumeMixer.isSupported {
-                emptyLabel(l10n.s.mixerUnavailable)
-            } else if mixer.needsPermission {
-                permissionHint
-            } else if visibleApps.isEmpty {
-                emptyLabel(l10n.s.mixerEmpty)
-            } else {
-                mixerRows
-            }
+            appVolumeControls
 
             Divider()
             optionsDisclosure
