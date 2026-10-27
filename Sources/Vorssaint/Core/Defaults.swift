@@ -8,6 +8,10 @@ import Foundation
 /// Every UserDefaults key used by the app, in one place.
 enum DefaultsKey {
     static let language = "appLanguage"                   // AppLanguage.rawValue
+    static let translationDoubleCopyEnabled = "translationDoubleCopyEnabled"
+    static let translationEngine = "translationEngine"
+    static let translationPopupWidth = "translationPopupWidth"
+    static let translationPopupFontSize = "translationPopupFontSize"
     static let appearance = "appAppearance"               // AppAppearance.rawValue
     static let liquidGlassEnabled = "liquidGlassEnabled"  // Liquid Glass in windows and panels on macOS 26+
     static let notchLiquidGlassEnabled = "notchLiquidGlassEnabled" // Dynamic Island glass, independently controlled
@@ -1180,6 +1184,10 @@ enum Defaults {
         DefaultsKey.keepAwakeAutoStart: false,
         DefaultsKey.keepAwakeRightClickToggle: false,
         DefaultsKey.keepAwakeSeparateMenuBarItem: false,
+        DefaultsKey.translationDoubleCopyEnabled: true,
+        DefaultsKey.translationEngine: TranslationEngine.apple.rawValue,
+        DefaultsKey.translationPopupWidth: TranslationCompactLayout.defaultWidth,
+        DefaultsKey.translationPopupFontSize: TranslationCompactLayout.defaultFontSize,
         DefaultsKey.keepAwakeAllowDisplaySleep: false,
         DefaultsKey.keepAwakeExternalDisplay: false,
         DefaultsKey.keepAwakeConnectedToPower: false,

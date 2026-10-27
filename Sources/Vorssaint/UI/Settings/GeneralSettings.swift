@@ -28,6 +28,7 @@ struct GeneralSettings: View {
                 Text(l10n.s.tabGeneral).font(.title2.bold())
                 basicsCard
                 appearanceCard
+                TranslationSettings()
                 if AppFeature.keepAwake.isAvailable {
                     shortcutCard
                 }

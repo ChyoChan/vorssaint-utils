@@ -27,6 +27,17 @@ enum SettingsFeatureTests {
         // MARK: Settings backup
 
         let backupKeys = SettingsBackupSupport.exportKeys()
+        let popupBackup = SettingsBackupSupport.payload(appVersion: "test") { key in
+            switch key {
+            case DefaultsKey.translationPopupWidth: return 710.0
+            case DefaultsKey.translationPopupFontSize: return 24.0
+            default: return nil
+            }
+        }
+        let popupSettings = SettingsBackupSupport.sanitizedSettings(from: popupBackup)
+        suite.expect(popupSettings?[DefaultsKey.translationPopupWidth] as? Double == 710 &&
+                     popupSettings?[DefaultsKey.translationPopupFontSize] as? Double == 24,
+                     "translation appearance survives a settings backup round trip")
         let marginBackup = SettingsBackupSupport.payload(appVersion: "test") { key in
             key == DefaultsKey.windowLayoutMarginPercent ? 12.0 : nil
         }

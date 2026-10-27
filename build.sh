@@ -324,6 +324,10 @@ if (( TEST )); then
         Sources/Vorssaint/Core/SnippetStrings.swift
         Sources/Vorssaint/Core/AlertSoundStrings.swift
         Sources/Vorssaint/Core/SoundPanelStrings.swift
+        Sources/Vorssaint/Core/TranslationStrings.swift
+        Sources/Vorssaint/Services/Translation/TranslationSupport.swift
+        Sources/Vorssaint/Services/Translation/GoogleTranslationClient.swift
+        Sources/Vorssaint/Services/Translation/TranslationKeychain.swift
         Sources/Vorssaint/UI/MenuPanel/SoundPanelControls.swift
         Sources/Vorssaint/Core/BrightnessStrings.swift
         Sources/Vorssaint/Core/MediaImageStrings.swift
