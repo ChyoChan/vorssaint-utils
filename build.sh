@@ -14,10 +14,19 @@ cd "$(dirname "$0")"
 # the script ends.
 ICON_TMP=""
 STAGE_TMP=""
+DEV_STATUS_TMP=""
+TEST_STATUS_RUN_ID=""
 
 cleanup() {
+    local build_exit_status=$?
+    if [[ -n "$TEST_STATUS_RUN_ID" ]]; then
+        python3 Tools/developer_build_status.py finish \
+            --run-id "$TEST_STATUS_RUN_ID" --exit-code "$build_exit_status" \
+            || echo "  Could not save the test status." >&2
+    fi
     [[ -n "$ICON_TMP" ]] && rm -rf "$ICON_TMP"
     [[ -n "$STAGE_TMP" ]] && rm -rf "$STAGE_TMP"
+    [[ -n "$DEV_STATUS_TMP" ]] && rm -f "$DEV_STATUS_TMP"
     return 0
 }
 trap cleanup EXIT
@@ -31,6 +40,7 @@ trap 'exit 1' INT TERM HUP
 DEV=0
 INSTALL=0
 TEST=0
+TEST_LIST_ONLY=0
 TEST_ARGS=()
 for arg in "$@"; do
     case "$arg" in
@@ -38,9 +48,13 @@ for arg in "$@"; do
         --install) INSTALL=1 ;;
         --test)    TEST=1 ;;
         --test-suite=*) TEST=1; TEST_ARGS+=("--suite=${arg#*=}") ;;
-        --list-tests) TEST=1; TEST_ARGS+=(--list) ;;
+        --list-tests) TEST=1; TEST_LIST_ONLY=1; TEST_ARGS+=(--list) ;;
     esac
 done
+
+if (( TEST && ! TEST_LIST_ONLY )); then
+    TEST_STATUS_RUN_ID="$(python3 Tools/developer_build_status.py begin "${TEST_ARGS[@]}")"
+fi
 
 if (( DEV )); then
     APP_NAME="Vorssaint (Developer)"
@@ -340,6 +354,9 @@ if (( TEST )); then
         Sources/Vorssaint/Core/AlertSoundStrings.swift
         Sources/Vorssaint/Core/SoundPanelStrings.swift
         Sources/Vorssaint/Core/TranslationStrings.swift
+        Sources/Vorssaint/Core/DeveloperBuildStatus.swift
+        Sources/Vorssaint/Core/DeveloperUpdateStrings.swift
+        Sources/Vorssaint/Services/DeveloperUpdateService.swift
         Sources/Vorssaint/Services/Translation/TranslationSupport.swift
         Sources/Vorssaint/Services/Translation/TranslationSpeechSupport.swift
         Sources/Vorssaint/Services/Translation/TranslationLineBreakCleanup.swift
@@ -600,12 +617,17 @@ if (( TEST )); then
         ./Tests/PreferenceCleanupTests.sh || test_status=1
         ./Tests/UninstallSpacesTests.sh || test_status=1
         ./Tests/DeveloperInstallIsolationTests.sh || test_status=1
+        python3 Tests/DeveloperBuildStatusToolTests.py || test_status=1
     fi
     discard_test_preferences || test_status=1
     exit $test_status
 fi
 
 echo "▸ Compiling ($BUILD_CONFIGURATION) against $(basename "$SDK")…"
+if (( DEV )); then
+    DEV_STATUS_TMP="$(mktemp)"
+    python3 Tools/developer_build_status.py snapshot --output "$DEV_STATUS_TMP"
+fi
 APP_SOURCES=(Sources/Vorssaint/**/*.swift)
 if (( ! DEV )); then
     # A release starts from an empty build directory, so nothing an earlier
@@ -711,13 +733,6 @@ if (( DEV )); then
     /usr/libexec/PlistBuddy -c "Set :BundleProgram Contents/Library/LaunchServices/$FAN_HELPER_ID" "$FAN_PLIST"
     /usr/libexec/PlistBuddy -c "Delete :MachServices:com.vorssaint.utils.fan-control" "$FAN_PLIST"
     /usr/libexec/PlistBuddy -c "Add :MachServices:$FAN_HELPER_ID bool true" "$FAN_PLIST"
-    # Stamp the source commit + build time so the running dev app shows (in About)
-    # exactly which code it was compiled from. Lets you verify it matches HEAD before
-    # testing, instead of unknowingly running a stale build. Dev-only; never shipped.
-    SHA="$(git rev-parse --short HEAD 2>/dev/null || echo unknown)"
-    [[ -n "$(git status --porcelain 2>/dev/null)" ]] && SHA="$SHA-dirty"
-    /usr/libexec/PlistBuddy -c "Add :VorssaintBuildCommit string '$SHA · $(date '+%Y-%m-%d %H:%M')'" "$STAGE/Contents/Info.plist"
-    echo "  stamped dev build: $SHA"
 fi
 FAN_HELPER_VERSION="$(
     export LC_ALL=C
@@ -746,6 +761,14 @@ fi
 if [[ -d Resources/Images ]]; then
     mkdir -p "$STAGE/Contents/Resources/Images"
     cp Resources/Images/* "$STAGE/Contents/Resources/Images/"
+fi
+if (( DEV )); then
+    # Keep the precompile identity; source edits during the build invalidate its fingerprint.
+    SHA="$(python3 Tools/developer_build_status.py snapshot \
+        --initial "$DEV_STATUS_TMP" --output "$STAGE/Contents/Resources/DeveloperBuildStatus.json" \
+        --print-commit)"
+    /usr/libexec/PlistBuddy -c "Add :VorssaintBuildCommit string '$SHA · $(date '+%Y-%m-%d %H:%M')'" "$STAGE/Contents/Info.plist"
+    echo "  stamped dev build: $SHA"
 fi
 xattr -c -r "$STAGE" 2>/dev/null || true
 

@@ -222,6 +222,8 @@ cd vorssaint-utils
 
 Xcode Command Line Tools are the only requirement. The [contributing guide](CONTRIBUTING.md) covers the layout and conventions. Official builds come only from the maintainer: the GPL covers the source, while the Vorssaint name, icon and look are covered by [TRADEMARKS.md](TRADEMARKS.md), so forks need their own identity.
 
+Developer builds include **Settings → About → Custom build status**. It shows the installed source commit, a manual check for unmerged commits on the original repository, and the local automated test record saved when the app was built. Run `./build.sh --test` before building to attach a full result; selected suites are labeled partial, and changed or unknown source identity is marked unverified. Native opt-in scripts and manual checks are not included in that record.
+
 ## When something misbehaves
 
 See [troubleshooting](docs/TROUBLESHOOTING.md) for launch problems, permissions and missing previews, or [support](SUPPORT.md) for help.

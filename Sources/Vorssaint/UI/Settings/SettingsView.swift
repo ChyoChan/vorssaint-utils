@@ -729,7 +729,11 @@ struct AboutSettings: View {
                 aboutContent
             }
 
-            UpdatesView()
+            if AppInfo.isDeveloperBuild {
+                DeveloperUpdateStatusSection()
+            } else {
+                UpdatesView()
+            }
         }
         .formStyle(.grouped)
     }
