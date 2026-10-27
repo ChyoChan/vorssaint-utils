@@ -91,7 +91,8 @@ enum DeveloperUpdateTests {
         for language in AppLanguage.allCases {
             let strings = DeveloperUpdateStrings(language: language)
             suite.expect(!strings.title.isEmpty && !strings.fullPassed.isEmpty &&
-                         strings.fullPassed != strings.selectedPassed && !strings.sourceChanged.isEmpty,
+                         strings.fullPassed != strings.selectedPassed && !strings.sourceChanged.isEmpty &&
+                         !strings.versionDetails.isEmpty && !strings.buildInfo.isEmpty && !strings.viewChanges.isEmpty,
                          "status labels retain explicit full and partial scope in every language")
             for error in [DeveloperUpdateError.missingBuildInfo, .network, .rateLimited,
                           .unavailable, .invalidResponse, .historyChanged] {
@@ -149,6 +150,17 @@ enum DeveloperUpdateTests {
     }
 
     private static func checkNetwork(_ suite: TestSuite) async {
+        let changes = DeveloperUpstreamClient.changesURL(base: upstream)
+        suite.expect(changes?.scheme == "https" && changes?.host == "github.com" &&
+                     changes?.path == "/vorssaint/vorssaint-utils/compare/\(upstream)...main" &&
+                     changes?.query == nil && changes?.fragment == nil,
+                     "upstream changes open the official comparison from the installed upstream base")
+        suite.expect(DeveloperUpstreamClient.changesURL(base: upstream.uppercased()) == changes,
+                     "comparison links normalize valid uppercase commit IDs")
+        for base in [nil, "", "main", "../main", String(repeating: "g", count: 40), upstream + "/main"] {
+            suite.expect(DeveloperUpstreamClient.changesURL(base: base) == nil,
+                         "missing or untrusted commit IDs cannot become comparison links")
+        }
         do {
             let request = try DeveloperUpstreamClient.makeRequest(base: upstream)
             suite.expect(request.url?.scheme == "https" && request.url?.host == "api.github.com" &&

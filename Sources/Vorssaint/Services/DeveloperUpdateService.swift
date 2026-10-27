@@ -49,6 +49,11 @@ struct DeveloperUpstreamClient {
         return request
     }
 
+    static func changesURL(base: String?) -> URL? {
+        guard let base, DeveloperBuildSnapshot.isHash(base, length: 40) else { return nil }
+        return URL(string: "https://github.com/vorssaint/vorssaint-utils/compare/" + base.lowercased() + "...main")
+    }
+
     func compare(base: String) async throws -> DeveloperUpstreamComparison {
         let request = try Self.makeRequest(base: base)
         try Task.checkCancellation()

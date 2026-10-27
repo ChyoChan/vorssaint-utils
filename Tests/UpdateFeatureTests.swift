@@ -461,7 +461,8 @@ enum UpdateFeatureTests {
                                    translation.pdfLineBreakCleanup, translation.speechOptions,
                                    translation.popupWidth, "API Key"]),
                 (updateItem, [updates.title, updates.pendingUpdates,
-                              updates.installedCommit, updates.lastTest]),
+                              updates.installedCommit, updates.lastTest,
+                              updates.versionDetails, updates.viewChanges]),
             ] {
                 suite.expect(item.destination.hasValidSectionAnchor,
                              "standalone settings search targets an anchor on the right page")

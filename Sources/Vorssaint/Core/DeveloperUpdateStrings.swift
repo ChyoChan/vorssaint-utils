@@ -11,6 +11,9 @@ struct DeveloperUpdateStrings {
     }
 
     var title: String { t("Custom build status", "自訂版更新狀態", "自定义版本更新状态") }
+    var versionDetails: String { t("Version details", "版本詳細資料", "版本详细信息") }
+    var buildInfo: String { t("Build", "建置資訊", "构建信息") }
+    var viewChanges: String { t("View upstream changes", "查看上游變更", "查看上游更改") }
     var installedCommit: String { t("Installed commit", "目前提交", "当前提交") }
     var modified: String { t("Includes uncommitted changes", "包含未提交的變更", "包含未提交的更改") }
     var upstreamBase: String { t("Merged upstream commit", "已合入的上游提交", "已合入的上游提交") }

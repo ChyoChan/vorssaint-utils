@@ -119,7 +119,8 @@ enum SettingsSearchSupport {
             destination: FeatureSettingsDestination(.about, sectionAnchor: .developerUpdateStatus),
             title: text.title, icon: "arrow.triangle.2.circlepath",
             keywords: [text.installedCommit, text.upstreamBase, text.pendingUpdates,
-                       text.lastTest, text.check, "GitHub"])
+                       text.lastTest, text.check, text.versionDetails, text.buildInfo,
+                       text.viewChanges, "GitHub"])
     }
 
     /// A dedicated page row wins over a generated feature row only when their

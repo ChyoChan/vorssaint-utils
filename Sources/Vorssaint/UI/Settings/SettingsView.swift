@@ -760,13 +760,6 @@ struct AboutSettings: View {
                             .clipShape(Capsule())
                     }
                 }
-                if AppInfo.isDeveloperBuild, let commit = AppInfo.buildCommit {
-                    // Dev-only: which source commit this build came from. Never shipped.
-                    Text(commit)
-                        .font(.caption2.monospaced())
-                        .foregroundStyle(.tertiary)
-                        .textSelection(.enabled)
-                }
             }
             Text(l10n.s.aboutDescription)
                 .font(.system(size: 12))

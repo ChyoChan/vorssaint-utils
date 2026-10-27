@@ -14,19 +14,6 @@ struct DeveloperUpdateStatusSection: View {
 
     var body: some View {
         Section(text.title) {
-            LabeledContent(text.installedCommit) {
-                VStack(alignment: .trailing, spacing: 3) {
-                    revision(model.snapshot?.revision)
-                        .accessibilityIdentifier("developerInstalledCommit")
-                    if model.snapshot?.dirty == true {
-                        Text(text.modified).font(.caption).foregroundStyle(.secondary)
-                            .fixedSize(horizontal: false, vertical: true)
-                    }
-                }
-            }
-            LabeledContent(text.upstreamBase) {
-                revision(model.snapshot?.upstreamRevision)
-            }
             LabeledContent(text.pendingUpdates) {
                 VStack(alignment: .trailing, spacing: 3) {
                     if let comparison = model.comparison {
@@ -47,6 +34,21 @@ struct DeveloperUpdateStatusSection: View {
                     }
                 }
             }
+            VStack(alignment: .leading, spacing: 10) {
+                HStack(spacing: 8) {
+                    Button(text.check) { Task { await model.refresh() } }
+                        .disabled(model.isChecking || model.snapshot?.upstreamRevision == nil)
+                        .accessibilityIdentifier("developerCheckUpdates")
+                    if model.isChecking {
+                        ProgressView().controlSize(.small)
+                            .accessibilityLabel(text.checking)
+                    }
+                }
+                if let url = DeveloperUpstreamClient.changesURL(base: model.snapshot?.upstreamRevision) {
+                    Link(text.viewChanges, destination: url)
+                        .accessibilityIdentifier("developerViewUpstreamChanges")
+                }
+            }
             if let checked = model.lastChecked {
                 dateRow(text.lastChecked, date: checked)
             }
@@ -57,16 +59,31 @@ struct DeveloperUpdateStatusSection: View {
                 warning(text.error(.missingBuildInfo))
                     .accessibilityIdentifier("developerUpdateError")
             }
-            HStack(spacing: 8) {
-                Button(text.check) { Task { await model.refresh() } }
-                    .disabled(model.isChecking || model.snapshot?.upstreamRevision == nil)
-                    .accessibilityIdentifier("developerCheckUpdates")
-                if model.isChecking {
-                    ProgressView().controlSize(.small)
-                        .accessibilityLabel(text.checking)
+            testResult
+            DisclosureGroup(text.versionDetails) {
+                LabeledContent(text.installedCommit) {
+                    VStack(alignment: .trailing, spacing: 3) {
+                        revision(model.snapshot?.revision)
+                            .accessibilityIdentifier("developerInstalledCommit")
+                        if model.snapshot?.dirty == true {
+                            Text(text.modified).font(.caption).foregroundStyle(.secondary)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+                    }
+                }
+                LabeledContent(text.upstreamBase) {
+                    revision(model.snapshot?.upstreamRevision)
+                }
+                if let stamp = AppInfo.buildCommit {
+                    LabeledContent(text.buildInfo) {
+                        Text(stamp).font(.caption.monospaced())
+                            .multilineTextAlignment(.trailing)
+                            .fixedSize(horizontal: false, vertical: true)
+                            .textSelection(.enabled)
+                    }
                 }
             }
-            testResult
+            .accessibilityIdentifier("developerVersionDetails")
             Text(text.caption).font(.caption).foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
         }
