@@ -115,14 +115,14 @@ struct TranslationStrings {
     var googleUsageReminderCaption: String {
         let threshold = GoogleTranslationUsageReminder.thresholdCharacters.formatted(.number)
         let allowance = GoogleTranslationUsageReminder.freeTierCharacters.formatted(.number)
-        return t("Remind once per Hong Kong calendar month at \(threshold) characters (90% of the \(allowance)-character reference allowance). Uses only this app's local estimate; translation will not stop. Other apps can share Google's free credit. Check Google Cloud for actual usage and charges.",
+        return t("Remind once per Hong Kong calendar month at \(threshold) characters (90% of the \(allowance)-character reference allowance). Uses only this app’s local estimate; translation will not stop. Other apps can share Google’s free credit. Check Google Cloud for actual usage and charges.",
                  "每個香港曆月於本機累計達 \(threshold) 字元時提醒一次（參考免費額度 \(allowance) 字元的 90%），不會停止翻譯。只根據此 App 的本機估算；其他 App 亦可能共用 Google 免費抵免，實際用量及費用請在 Google Cloud 核對。",
                  "每个香港日历月在本地累计达到 \(threshold) 字符时提醒一次（参考免费额度 \(allowance) 字符的 90%），不会停止翻译。仅根据此 App 的本地估算；其他 App 也可能共用 Google 免费抵免，实际用量及费用请在 Google Cloud 核对。")
     }
     var hongKongTime: String { t("Hong Kong time", "香港時間", "香港时间") }
     var googleUsageConsole: String { t("View Google Cloud usage", "查看 Google Cloud 用量", "查看 Google Cloud 用量") }
     var googleUsageCaption: String {
-        t("Counts this app's submissions since this feature was added, including spaces and line breaks. Failed or cancelled submissions remain counted. Resets monthly in Hong Kong time; actual usage and charges are shown in Google Cloud.",
+        t("Counts this app’s submissions since this feature was added, including spaces and line breaks. Failed or cancelled submissions remain counted. Resets monthly in Hong Kong time; actual usage and charges are shown in Google Cloud.",
           "只記錄此功能加入後、這個 App 提交的原文字元，包含空格及換行。送出後失敗或取消仍計入估算，按香港時間每月重新計算；實際用量及費用以 Google Cloud 為準。",
           "只记录此功能加入后、这个 App 提交的原文字符，包含空格及换行。发送后失败或取消仍计入估算，按香港时间每月重新计算；实际用量及费用以 Google Cloud 为准。")
     }
@@ -146,11 +146,11 @@ struct TranslationStrings {
         case .missingKey: return keyMissing
         case .invalidKey: return keyInvalid
         case .denied:
-            return t("Google denied access. Check the key's API restrictions, enabled Cloud Translation API and billing account.",
+            return t("Google denied access. Check the key’s API restrictions, enabled Cloud Translation API and billing account.",
                      "Google 拒絕存取，請檢查金鑰的 API 限制、Cloud Translation API 是否啟用，以及付款帳戶。",
                      "Google 拒绝访问，请检查密钥的 API 限制、Cloud Translation API 是否启用，以及付款账户。")
         case .quota:
-            return t("Google's quota or request limit was reached. Check your Cloud Console before retrying.",
+            return t("Google’s quota or request limit was reached. Check your Cloud Console before retrying.",
                      "已達 Google 配額或請求限制，請先檢查 Cloud Console 再重試。",
                      "已达 Google 配额或请求限制，请先检查 Cloud Console 再重试。")
         case .network:
@@ -160,7 +160,7 @@ struct TranslationStrings {
             return t("Google rejected the request. Check your API key and selected languages.",
                      "Google 未接受請求，請檢查 API Key 及所選語言。", "Google 未接受请求，请检查 API Key 及所选语言。")
         case .requestTooLarge:
-            return t("The complete text exceeds Google's 100 KB request limit. Select a shorter passage; text was not split or sent.",
+            return t("The complete text exceeds Google’s 100 KB request limit. Select a shorter passage; text was not split or sent.",
                      "完整內容超過 Google 的 100 KB 請求上限，請選取較短內容；文字未被分段或傳送。",
                      "完整内容超过 Google 的 100 KB 请求上限，请选取较短内容；文字未被分段或发送。")
         case .invalidResponse, .unavailable:
