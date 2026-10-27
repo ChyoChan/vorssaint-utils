@@ -35,9 +35,9 @@ enum QuickToolHUD {
         return scrollingPanel.windowNumber
     }
 
-    static func show(icon: String, message: String, swatch: NSColor? = nil) {
+    static func show(icon: String, message: String, swatch: NSColor? = nil, dismissAfter: TimeInterval = 1.5) {
         guard Thread.isMainThread else {
-            DispatchQueue.main.async { show(icon: icon, message: message, swatch: swatch) }
+            DispatchQueue.main.async { show(icon: icon, message: message, swatch: swatch, dismissAfter: dismissAfter) }
             return
         }
         let content = HStack(spacing: 8) {
@@ -74,7 +74,7 @@ enum QuickToolHUD {
         .padding(.vertical, 9)
         .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
 
-        present(AnyView(content), dismissAfter: 1.5)
+        present(AnyView(content), dismissAfter: dismissAfter)
     }
 
     static func showCountdown(_ value: Int) {

@@ -66,6 +66,7 @@ final class TranslationService: NSObject, ObservableObject, NSWindowDelegate {
         let selected = TranslationEngine(rawValue: UserDefaults.standard.string(forKey: DefaultsKey.translationEngine) ?? "") ?? .apple
         if selected != engine { engine = selected; inputDidChange() }
         applyPopupAppearance()
+        checkGoogleUsageReminder()
         let supported: Bool
         if #available(macOS 15.0, *) { supported = true } else { supported = false }
         guard enabled, supported else {
@@ -86,6 +87,25 @@ final class TranslationService: NSObject, ObservableObject, NSWindowDelegate {
             return event
         }
         listening = globalMonitor != nil
+    }
+
+    func checkGoogleUsageReminder(at date: Date = Date()) {
+        precondition(Thread.isMainThread)
+        let defaults = UserDefaults.standard
+        let usage = GoogleTranslationUsageStore.shared.snapshot(at: date)
+        guard GoogleTranslationUsageReminder.shouldShow(
+            usage: usage,
+            enabled: defaults.bool(forKey: DefaultsKey.translationGoogleUsageReminderEnabled),
+            lastShownMonth: defaults.string(forKey: DefaultsKey.translationGoogleUsageReminderMonth)) else { return }
+        // Mark first: saving the month itself triggers another settings refresh.
+        defaults.set(usage.month, forKey: DefaultsKey.translationGoogleUsageReminderMonth)
+        QuickToolHUD.show(icon: "exclamationmark.triangle", message: strings.googleUsageReminderHUD,
+                          dismissAfter: 5)
+        if Bundle.main.bundleIdentifier != nil {
+            NSAccessibility.post(element: NSApplication.shared, notification: .announcementRequested,
+                                 userInfo: [.announcement: strings.googleUsageReminderHUD,
+                                            .priority: NSAccessibilityPriorityLevel.medium.rawValue])
+        }
     }
 
     func stop() {

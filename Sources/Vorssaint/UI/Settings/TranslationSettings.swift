@@ -49,6 +49,8 @@ struct TranslationSettings: View {
                         Text(credentialStatus).font(.caption).foregroundStyle(.secondary)
                             .fixedSize(horizontal: false, vertical: true)
                     }
+                    Divider()
+                    GoogleTranslationUsageView()
                 }
                 Divider()
                 Toggle(text.enable, isOn: $enabled)

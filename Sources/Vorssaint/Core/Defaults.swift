@@ -10,6 +10,9 @@ enum DefaultsKey {
     static let language = "appLanguage"                   // AppLanguage.rawValue
     static let translationDoubleCopyEnabled = "translationDoubleCopyEnabled"
     static let translationEngine = "translationEngine"
+    static let translationGoogleUsage = "translationGoogleUsage"
+    static let translationGoogleUsageReminderEnabled = "translationGoogleUsageReminderEnabled"
+    static let translationGoogleUsageReminderMonth = "translationGoogleUsageReminderMonth"
     static let translationPopupWidth = "translationPopupWidth"
     static let translationPopupFontSize = "translationPopupFontSize"
     static let translationPDFLineBreakCleanup = "translationPDFLineBreakCleanup"
@@ -1187,6 +1190,8 @@ enum Defaults {
         DefaultsKey.keepAwakeSeparateMenuBarItem: false,
         DefaultsKey.translationDoubleCopyEnabled: true,
         DefaultsKey.translationEngine: TranslationEngine.apple.rawValue,
+        DefaultsKey.translationGoogleUsageReminderEnabled: true,
+        DefaultsKey.translationGoogleUsageReminderMonth: "",
         DefaultsKey.translationPopupWidth: TranslationCompactLayout.defaultWidth,
         DefaultsKey.translationPopupFontSize: TranslationCompactLayout.defaultFontSize,
         DefaultsKey.translationPDFLineBreakCleanup: true,

@@ -27,6 +27,11 @@ enum SettingsFeatureTests {
         // MARK: Settings backup
 
         let backupKeys = SettingsBackupSupport.exportKeys()
+        suite.expect(!backupKeys.contains(DefaultsKey.translationGoogleUsage),
+                     "restoring a settings backup cannot roll back local Google usage totals")
+        suite.expect(backupKeys.contains(DefaultsKey.translationGoogleUsageReminderEnabled) &&
+                     !backupKeys.contains(DefaultsKey.translationGoogleUsageReminderMonth),
+                     "reminder preference is portable but its monthly delivery state stays local")
         let popupBackup = SettingsBackupSupport.payload(appVersion: "test") { key in
             switch key {
             case DefaultsKey.translationPopupWidth: return 710.0

@@ -181,6 +181,8 @@ enum SettingsDirectory {
                                                   TranslationStrings(language: language).title,
                                                   TranslationStrings(language: language).enable,
                                                   TranslationStrings(language: language).engine,
+                                                  TranslationStrings(language: language).googleUsageTitle,
+                                                  TranslationStrings(language: language).googleUsageReminder,
                                                   TranslationStrings(language: language).popupAppearance,
                                                   TranslationStrings(language: language).popupFontSize,
                                                   TranslationStrings(language: language).pdfLineBreakCleanup,

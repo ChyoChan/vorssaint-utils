@@ -27,7 +27,7 @@ final class GoogleTranslationClient {
     private let session: URLSession?
     private let recordUsage: (Int) -> Void
 
-    init(recordUsage: @escaping (Int) -> Void = { _ in },
+    init(recordUsage: @escaping (Int) -> Void = { GoogleTranslationUsageStore.shared.record(characterCount: $0) },
          transport: Transport? = nil) {
         self.recordUsage = recordUsage
         if let transport {

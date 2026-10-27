@@ -5,6 +5,7 @@ import Foundation
 
 enum TranslationTests {
     static func run(_ suite: TestSuite) {
+        GoogleTranslationUsageTests.run(suite)
         TranslationLineBreakCleanupTests.run { suite.expect($0, $1) }
         suite.expect(Defaults.registeredDefaults[DefaultsKey.translationPDFLineBreakCleanup] as? Bool == true,
                      "PDF line break cleanup is enabled by default")
@@ -123,6 +124,7 @@ enum TranslationTests {
         suite.expect(TranslationStrings(language: .zhHK).title == "翻譯", "Hong Kong uses Traditional Chinese")
         let done = DispatchSemaphore(value: 0)
         Task.detached {
+            await GoogleTranslationUsageTests.checkClient(suite)
             await testGoogle(suite)
             for original in [" First line.\n\nSecond line. \n", "中文第一段。\r\n第二段。",
                              "\t leading\tand trailing \t", String(repeating: "👩🏽‍💻中é", count: 1_800),
