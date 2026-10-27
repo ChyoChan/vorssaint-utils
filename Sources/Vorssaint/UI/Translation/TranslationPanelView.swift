@@ -92,6 +92,8 @@ struct TranslationPanelView: View {
             .help(text.edit)
             .fixedSize()
             Spacer(minLength: 0)
+            speechButton(.original).fixedSize()
+            speechButton(.translation).fixedSize()
             if model.busy {
                 Button(text.cancel) { model.cancel() }
             } else if model.output.isEmpty && !model.input.isEmpty {
@@ -136,6 +138,7 @@ struct TranslationPanelView: View {
                         Text(text.source).font(.subheadline.weight(.medium)).foregroundStyle(.secondary)
                             .accessibilityAddTraits(.isHeader)
                         Spacer(minLength: 0)
+                        speechButton(.original).labelStyle(.iconOnly)
                     }
                     ZStack(alignment: .topLeading) {
                         TextEditor(text: Binding(get: { model.input }, set: {
@@ -175,6 +178,7 @@ struct TranslationPanelView: View {
                         Text(text.result).font(.subheadline.weight(.medium)).foregroundStyle(.secondary)
                             .accessibilityAddTraits(.isHeader)
                         Spacer(minLength: 0)
+                        speechButton(.translation).labelStyle(.iconOnly)
                     }
                     resultText(compact: false)
                     HStack {
@@ -191,6 +195,22 @@ struct TranslationPanelView: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(.horizontal, 16).padding(.vertical, 10)
         }
+    }
+
+    private func speechButton(_ part: TranslationSpeechPart) -> some View {
+        let speaking = model.speakingPart == part
+        let label = speaking ? text.stopSpeech : (part == .original ? text.speakOriginal : text.speakTranslation)
+        let content = part == .original ? model.input : model.output
+        return Button { model.toggleSpeech(part) } label: {
+            Label(label, systemImage: speaking ? "stop.fill" : "speaker.wave.2")
+                .frame(minHeight: model.presentation == .compact ? 20 : nil)
+        }
+        .controlSize(model.presentation == .compact ? .large : .small)
+        .disabled(model.busy || content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+        .accessibilityLabel(label)
+        .accessibilityValue(speaking ? text.speaking : "")
+        .accessibilityIdentifier(part == .original ? "translationSpeakOriginal" : "translationSpeakResult")
+        .help(label)
     }
 
     private var copyButton: some View {
@@ -241,6 +261,10 @@ struct TranslationPanelView: View {
                             .frame(maxWidth: .infinity, alignment: .leading)
                         if !model.output.isEmpty, let message = model.message {
                             Text(message).font(.callout).foregroundStyle(.secondary)
+                        }
+                        if let message = model.speechMessage {
+                            Text(message).font(.callout).foregroundStyle(.secondary)
+                                .accessibilityIdentifier("translationSpeechMessage")
                         }
                     }
                 }

@@ -47,6 +47,55 @@ struct TranslationStrings {
     var copy: String { t("Copy translation", "複製譯文", "复制译文") }
     var copied: String { t("Copied", "已複製", "已复制") }
     var paste: String { t("Use copied text", "使用已複製文字", "使用已复制文字") }
+    var speakOriginal: String { t("Read original", "朗讀原文", "朗读原文") }
+    var speakTranslation: String { t("Read translation", "朗讀譯文", "朗读译文") }
+    var stopSpeech: String { t("Stop reading", "停止朗讀", "停止朗读") }
+    var speaking: String { t("Reading aloud", "朗讀中", "朗读中") }
+    var chineseVoice: String { t("Chinese speech", "中文朗讀", "中文朗读") }
+    var cantonese: String { t("Cantonese", "廣東話", "广东话") }
+    var mandarin: String { t("Mandarin", "普通話", "普通话") }
+    var speechOptions: String { t("Reading voice", "朗讀聲音", "朗读声音") }
+    var speechAutomaticVoice: String { t("Automatic (best quality)", "自動（最高品質）", "自动（最高质量）") }
+    var speechPreview: String { t("Preview", "試聽", "试听") }
+    var speechStopPreview: String { t("Stop", "停止") }
+    var speechRate: String { t("Reading speed", "朗讀速度", "朗读速度") }
+    var speechSlower: String { t("Slower", "較慢", "较慢") }
+    var speechFaster: String { t("Faster", "較快", "较快") }
+    var speechNormal: String { t("Normal", "標準", "标准") }
+    var speechResetRate: String { t("Normal speed", "標準語速", "标准语速") }
+    var speechDownload: String { t("Download more voices…", "下載更多聲音…", "下载更多声音…") }
+    var speechBasic: String { t("Basic", "基本", "基本") }
+    var speechEnhanced: String { t("Enhanced", "增強", "增强") }
+    var speechPremium: String { t("Premium", "優質", "优质") }
+    var speechUnavailableSelection: String { t("Selected voice unavailable (uses Automatic)", "所選聲音未安裝（自動替代）", "所选声音未安装（自动替代）") }
+    var speechDownloadCaption: String {
+        t("Download Enhanced or Premium voices in macOS Accessibility → Read & Speak → System voice ⓘ. Voices refresh when you return. Automatic prefers a matching language and region, then the best installed quality. Selection and speed apply to previews and translation reading; unavailable voices fall back to Automatic.",
+          "可在 macOS「輔助使用 → 閱讀與朗讀 → 系統聲音 ⓘ」下載增強或優質語音，返回時會更新清單。自動模式優先配對語言及地區，再選最高品質。所選聲音及速度會套用到試聽和翻譯朗讀；未安裝的聲音會自動替代。",
+          "可在 macOS“辅助功能 → 阅读与朗读 → 系统声音 ⓘ”下载增强或优质语音，返回时会更新列表。自动模式优先匹配语言和地区，再选最高质量。所选声音及速度会应用于试听和翻译朗读；未安装的声音会自动替代。")
+    }
+    func speechLanguage(_ language: String) -> String {
+        switch language {
+        case "en": return t("English", "英文")
+        case "yue-HK": return cantonese
+        case "zh-TW": return mandarin
+        case "ja": return t("Japanese", "日文")
+        default: return language
+        }
+    }
+    var speechCaption: String {
+        t("Press a speaker button to read a word, sentence or passage using installed macOS voices. English and Japanese use their matching voice. Reading does not use Google translation characters.",
+          "按喇叭按鈕，使用已安裝的 macOS 語音朗讀單字、句子或段落；英文及日文會使用相應語音。朗讀不計入 Google 翻譯字元用量。",
+          "按喇叭按钮，使用已安装的 macOS 语音朗读单词、句子或段落；英文及日文会使用相应语音。朗读不计入 Google 翻译字符用量。")
+    }
+    var speechUnknownLanguage: String {
+        t("Choose the original language in Edit, then try reading again.",
+          "請在「編輯」選擇原文語言，再試朗讀。", "请在“编辑”选择原文语言，再试朗读。")
+    }
+    var speechVoiceMissing: String {
+        t("No installed voice matches this language. Download a voice in System Settings → Accessibility → Read & Speak, then try again.",
+          "找不到此語言的已安裝語音。請到「系統設定 → 輔助使用 → 閱讀與朗讀」下載相應語音，再試朗讀。",
+          "找不到此语言的已安装语音。请到“系统设置 → 辅助功能 → 朗读与语音”下载相应语音，再试朗读。")
+    }
     var cancel: String { t("Cancel", "取消") }
     var close: String { t("Close", "關閉", "关闭") }
     var edit: String { t("Edit", "編輯", "编辑") }

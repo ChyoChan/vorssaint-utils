@@ -3,13 +3,14 @@
 
 import AppKit
 import ApplicationServices
+import AVFoundation
 import Carbon.HIToolbox
 import Combine
 import SwiftUI
 
 /// On-demand translation. Apple stays local; Google is an explicit cloud opt-in.
 /// Text and credentials are never logged or written to translation history.
-final class TranslationService: NSObject, ObservableObject, NSWindowDelegate {
+final class TranslationService: NSObject, ObservableObject, NSWindowDelegate, AVSpeechSynthesizerDelegate {
     static let shared = TranslationService()
     @Published var input = ""
     @Published var source = TranslationLanguageDefaults.source
@@ -21,11 +22,23 @@ final class TranslationService: NSObject, ObservableObject, NSWindowDelegate {
     @Published private(set) var request: TranslationRequest?
     @Published private(set) var listening = false
     @Published private(set) var presentation: TranslationPresentation = .editor
+    @Published private(set) var speakingPart: TranslationSpeechPart?
+    @Published private(set) var speechMessage: String?
+    @Published private(set) var availableSpeechVoices: [AVSpeechSynthesisVoice] = []
+    @Published private(set) var speechVoiceSelections = TranslationSpeechPreferences.voiceSelections(
+        UserDefaults.standard.dictionary(forKey: DefaultsKey.translationSpeechVoices))
+    @Published private(set) var speechRate = TranslationSpeechPreferences.rate(
+        UserDefaults.standard.double(forKey: DefaultsKey.translationSpeechRate))
     @Published private(set) var engine = TranslationEngine(
         rawValue: UserDefaults.standard.string(forKey: DefaultsKey.translationEngine) ?? "") ?? .apple
     var privacyNotice: String { engine == .apple ? strings.privacy : strings.googlePrivacy }
     var engineName: String { engine == .apple ? strings.localEngine : strings.googleEngine }
     private var cloudTask: Task<Void, Never>?
+    private var speechSynthesizer: AVSpeechSynthesizer?
+    private let speechVoices: () -> [AVSpeechSynthesisVoice]
+    private var speechUtterance: AVSpeechUtterance?
+    private var chineseVoice = TranslationSpeechLanguage.chineseVoice(
+        UserDefaults.standard.string(forKey: DefaultsKey.translationChineseVoice))
     private var shortcutWasEnabled: Bool?
     private var panel: NSPanel?
     private var globalMonitor: Any?
@@ -43,6 +56,13 @@ final class TranslationService: NSObject, ObservableObject, NSWindowDelegate {
     private final class CopyObservation { var changeCount: Int? }
     private var firstCopy: CopyObservation?
     private var strings: TranslationStrings { TranslationStrings(language: L10n.shared.language) }
+
+    init(speechSynthesizer: AVSpeechSynthesizer? = nil,
+         speechVoices: @escaping () -> [AVSpeechSynthesisVoice] = AVSpeechSynthesisVoice.speechVoices) {
+        self.speechSynthesizer = speechSynthesizer
+        self.speechVoices = speechVoices
+        super.init()
+    }
 
     func start() {
         guard !started else { return }
@@ -65,6 +85,17 @@ final class TranslationService: NSObject, ObservableObject, NSWindowDelegate {
         shortcutWasEnabled = enabled
         let selected = TranslationEngine(rawValue: UserDefaults.standard.string(forKey: DefaultsKey.translationEngine) ?? "") ?? .apple
         if selected != engine { engine = selected; inputDidChange() }
+        let voice = TranslationSpeechLanguage.chineseVoice(
+            UserDefaults.standard.string(forKey: DefaultsKey.translationChineseVoice))
+        let selections = TranslationSpeechPreferences.voiceSelections(
+            UserDefaults.standard.dictionary(forKey: DefaultsKey.translationSpeechVoices))
+        let rate = TranslationSpeechPreferences.rate(UserDefaults.standard.double(forKey: DefaultsKey.translationSpeechRate))
+        if voice != chineseVoice || selections != speechVoiceSelections || rate != speechRate {
+            stopSpeech()
+            chineseVoice = voice
+            speechVoiceSelections = selections
+            speechRate = rate
+        }
         applyPopupAppearance()
         checkGoogleUsageReminder()
         let supported: Bool
@@ -245,6 +276,7 @@ final class TranslationService: NSObject, ObservableObject, NSWindowDelegate {
     }
 
     func close() {
+        stopSpeech()
         removeDismissMonitors()
         cloudTask?.cancel()
         cloudTask = nil
@@ -325,6 +357,7 @@ final class TranslationService: NSObject, ObservableObject, NSWindowDelegate {
     func useCopiedText(requiringChangeAfter baseline: Int? = nil, requiresFreshCopy: Bool = false,
                        presentation mode: TranslationPresentation? = nil) {
         guard !readInFlight else { return }
+        stopSpeech()
         cloudTask?.cancel()
         cloudTask = nil
         let token = generation.advance()
@@ -361,6 +394,7 @@ final class TranslationService: NSObject, ObservableObject, NSWindowDelegate {
     }
 
     func inputDidChange() {
+        stopSpeech()
         cloudTask?.cancel()
         cloudTask = nil
         generation.advance()
@@ -408,6 +442,7 @@ final class TranslationService: NSObject, ObservableObject, NSWindowDelegate {
     }
 
     func translate() {
+        stopSpeech()
         do { _ = try TranslationTextPlan.validate(input) }
         catch { message = inputMessage(error); return }
         cloudTask?.cancel()
@@ -441,6 +476,7 @@ final class TranslationService: NSObject, ObservableObject, NSWindowDelegate {
     }
 
     func cancel() {
+        stopSpeech()
         cloudTask?.cancel()
         cloudTask = nil
         generation.advance()
@@ -465,6 +501,96 @@ final class TranslationService: NSObject, ObservableObject, NSWindowDelegate {
             else { message = strings.failed }
         }
         request = nil
+    }
+
+    func toggleSpeech(_ part: TranslationSpeechPart) {
+        precondition(Thread.isMainThread)
+        let wasSpeaking = speakingPart == part
+        stopSpeech()
+        guard !wasSpeaking, !busy else { return }
+        let text: String
+        let preferred: String?
+        switch part {
+        case .original, .translation:
+            text = (part == .original ? input : output).trimmingCharacters(in: .whitespacesAndNewlines)
+            preferred = TranslationSpeechLanguage.preferred(for: text,
+                language: part == .original ? source : target, chineseVoice: chineseVoice)
+        case .preview(let language):
+            guard let sample = TranslationSpeechLanguage.sampleText(language) else { return }
+            text = sample
+            preferred = language == "en" ? "en-US" : (language == "ja" ? "ja-JP" : language)
+        }
+        guard !text.isEmpty else { return }
+        guard let language = preferred else {
+            speechMessage = strings.speechUnknownLanguage
+            return
+        }
+        let voices = usableSpeechVoices()
+        let group = TranslationSpeechLanguage.voiceGroup(language)
+        let selected = voices.first {
+            $0.identifier == speechVoiceSelections[group] && TranslationSpeechLanguage.voiceGroup($0.language) == group
+        }
+        let matched = TranslationSpeechLanguage.matchingVoiceLanguage(language, available: voices.map(\.language))
+        guard let voice = selected ?? voices.first(where: { $0.language == matched }) else {
+            speechMessage = strings.speechVoiceMissing
+            return
+        }
+        let utterance = AVSpeechUtterance(string: text)
+        utterance.voice = voice
+        utterance.rate = Float(speechRate)
+        if speechSynthesizer == nil { speechSynthesizer = AVSpeechSynthesizer() }
+        speechSynthesizer?.delegate = self
+        speechUtterance = utterance
+        speakingPart = part
+        speechSynthesizer?.speak(utterance)
+    }
+
+    private func usableSpeechVoices() -> [AVSpeechSynthesisVoice] {
+        speechVoices().filter {
+            !$0.voiceTraits.contains(.isNoveltyVoice) && !$0.voiceTraits.contains(.isPersonalVoice)
+        }.sorted { $0.quality.rawValue > $1.quality.rawValue }
+    }
+
+    func refreshSpeechVoices() {
+        availableSpeechVoices = usableSpeechVoices()
+    }
+
+    func setSpeechVoice(_ identifier: String, language: String) {
+        let group = TranslationSpeechLanguage.voiceGroup(language)
+        guard TranslationSpeechLanguage.voiceGroups.contains(group) else { return }
+        var selections = speechVoiceSelections
+        selections[group] = identifier.isEmpty ? nil : identifier
+        UserDefaults.standard.set(selections, forKey: DefaultsKey.translationSpeechVoices)
+        syncWithPreferences()
+    }
+
+    func setSpeechRate(_ value: Double) {
+        UserDefaults.standard.set(TranslationSpeechPreferences.rate(value), forKey: DefaultsKey.translationSpeechRate)
+        syncWithPreferences()
+    }
+
+    func stopSpeech() {
+        let hadSpeech = speechUtterance != nil
+        speechUtterance = nil
+        speakingPart = nil
+        speechMessage = nil
+        if hadSpeech { speechSynthesizer?.stopSpeaking(at: .immediate) }
+    }
+
+    func speechSynthesizer(_ synthesizer: AVSpeechSynthesizer, didFinish utterance: AVSpeechUtterance) {
+        speechEnded(utterance)
+    }
+
+    func speechSynthesizer(_ synthesizer: AVSpeechSynthesizer, didCancel utterance: AVSpeechUtterance) {
+        speechEnded(utterance)
+    }
+
+    private func speechEnded(_ utterance: AVSpeechUtterance) {
+        DispatchQueue.main.async { [weak self] in
+            guard let self, self.speechUtterance === utterance else { return }
+            self.speechUtterance = nil
+            self.speakingPart = nil
+        }
     }
 
     func copyOutput() {

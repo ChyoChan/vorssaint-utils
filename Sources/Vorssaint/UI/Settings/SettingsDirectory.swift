@@ -186,6 +186,10 @@ enum SettingsDirectory {
                                                   TranslationStrings(language: language).popupAppearance,
                                                   TranslationStrings(language: language).popupFontSize,
                                                   TranslationStrings(language: language).pdfLineBreakCleanup,
+                                                  TranslationStrings(language: language).chineseVoice,
+                                                  TranslationStrings(language: language).speakOriginal,
+                                                  TranslationStrings(language: language).speechOptions,
+                                                  TranslationStrings(language: language).speechRate,
                                                   "Google", "API Key"],
                                        featureKeywords: [
                                         (.musicBlock, [s.musicBlockTitle, s.musicBlockSection]),

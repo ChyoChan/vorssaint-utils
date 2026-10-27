@@ -16,6 +16,9 @@ enum DefaultsKey {
     static let translationPopupWidth = "translationPopupWidth"
     static let translationPopupFontSize = "translationPopupFontSize"
     static let translationPDFLineBreakCleanup = "translationPDFLineBreakCleanup"
+    static let translationChineseVoice = "translationChineseVoice"
+    static let translationSpeechVoices = "translationSpeechVoices"
+    static let translationSpeechRate = "translationSpeechRate"
     static let appearance = "appAppearance"               // AppAppearance.rawValue
     static let liquidGlassEnabled = "liquidGlassEnabled"  // Liquid Glass in windows and panels on macOS 26+
     static let notchLiquidGlassEnabled = "notchLiquidGlassEnabled" // Dynamic Island glass, independently controlled
@@ -1195,6 +1198,9 @@ enum Defaults {
         DefaultsKey.translationPopupWidth: TranslationCompactLayout.defaultWidth,
         DefaultsKey.translationPopupFontSize: TranslationCompactLayout.defaultFontSize,
         DefaultsKey.translationPDFLineBreakCleanup: true,
+        DefaultsKey.translationChineseVoice: TranslationSpeechLanguage.defaultChineseVoice,
+        DefaultsKey.translationSpeechVoices: [:] as [String: String],
+        DefaultsKey.translationSpeechRate: TranslationSpeechPreferences.defaultRate,
         DefaultsKey.keepAwakeAllowDisplaySleep: false,
         DefaultsKey.keepAwakeExternalDisplay: false,
         DefaultsKey.keepAwakeConnectedToPower: false,

@@ -12,6 +12,7 @@ struct TranslationSettings: View {
     @AppStorage(DefaultsKey.translationPDFLineBreakCleanup) private var pdfLineBreakCleanup = true
     @AppStorage(DefaultsKey.translationPopupWidth) private var popupWidth = TranslationCompactLayout.defaultWidth
     @AppStorage(DefaultsKey.translationPopupFontSize) private var popupFontSize = TranslationCompactLayout.defaultFontSize
+    @AppStorage(DefaultsKey.translationChineseVoice) private var chineseVoice = TranslationSpeechLanguage.defaultChineseVoice
     @State private var keyDraft = ""
     private var text: TranslationStrings { TranslationStrings(language: l10n.language) }
 
@@ -64,6 +65,18 @@ struct TranslationSettings: View {
                     Button(l10n.s.permissionOpenSettings) { permissions.requestAccessibility() }
                 }
                 Button(text.open) { translation.open() }
+                Divider()
+                Picker(text.chineseVoice, selection: Binding(
+                    get: { TranslationSpeechLanguage.chineseVoice(chineseVoice) },
+                    set: { chineseVoice = $0 }
+                )) {
+                    Text(text.cantonese).tag("yue-HK")
+                    Text(text.mandarin).tag("zh-TW")
+                }
+                .onChange(of: chineseVoice) { _, _ in translation.syncWithPreferences() }
+                Text(text.speechCaption).font(.caption).foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                TranslationSpeechSettings(model: translation)
                 Divider()
                 Toggle(text.pdfLineBreakCleanup, isOn: $pdfLineBreakCleanup)
                     .toggleStyle(.switch)

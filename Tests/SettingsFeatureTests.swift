@@ -36,13 +36,19 @@ enum SettingsFeatureTests {
             switch key {
             case DefaultsKey.translationPopupWidth: return 710.0
             case DefaultsKey.translationPopupFontSize: return 24.0
+            case DefaultsKey.translationChineseVoice: return "zh-TW"
+            case DefaultsKey.translationSpeechVoices: return ["en": "fixture.voice"]
+            case DefaultsKey.translationSpeechRate: return 0.4
             default: return nil
             }
         }
         let popupSettings = SettingsBackupSupport.sanitizedSettings(from: popupBackup)
         suite.expect(popupSettings?[DefaultsKey.translationPopupWidth] as? Double == 710 &&
-                     popupSettings?[DefaultsKey.translationPopupFontSize] as? Double == 24,
-                     "translation appearance survives a settings backup round trip")
+                     popupSettings?[DefaultsKey.translationPopupFontSize] as? Double == 24 &&
+                     popupSettings?[DefaultsKey.translationChineseVoice] as? String == "zh-TW" &&
+                     popupSettings?[DefaultsKey.translationSpeechVoices] as? [String: String] == ["en": "fixture.voice"] &&
+                     popupSettings?[DefaultsKey.translationSpeechRate] as? Double == 0.4,
+                     "translation appearance, voice selections and speed survive a settings backup round trip")
         let marginBackup = SettingsBackupSupport.payload(appVersion: "test") { key in
             key == DefaultsKey.windowLayoutMarginPercent ? 12.0 : nil
         }

@@ -5,6 +5,7 @@ import Foundation
 
 enum TranslationTests {
     static func run(_ suite: TestSuite) {
+        TranslationSpeechTests.run(suite)
         GoogleTranslationUsageTests.run(suite)
         TranslationLineBreakCleanupTests.run { suite.expect($0, $1) }
         suite.expect(Defaults.registeredDefaults[DefaultsKey.translationPDFLineBreakCleanup] as? Bool == true,
