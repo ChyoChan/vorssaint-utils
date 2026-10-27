@@ -12,6 +12,7 @@ enum DefaultsKey {
     static let translationEngine = "translationEngine"
     static let translationPopupWidth = "translationPopupWidth"
     static let translationPopupFontSize = "translationPopupFontSize"
+    static let translationPDFLineBreakCleanup = "translationPDFLineBreakCleanup"
     static let appearance = "appAppearance"               // AppAppearance.rawValue
     static let liquidGlassEnabled = "liquidGlassEnabled"  // Liquid Glass in windows and panels on macOS 26+
     static let notchLiquidGlassEnabled = "notchLiquidGlassEnabled" // Dynamic Island glass, independently controlled
@@ -1188,6 +1189,7 @@ enum Defaults {
         DefaultsKey.translationEngine: TranslationEngine.apple.rawValue,
         DefaultsKey.translationPopupWidth: TranslationCompactLayout.defaultWidth,
         DefaultsKey.translationPopupFontSize: TranslationCompactLayout.defaultFontSize,
+        DefaultsKey.translationPDFLineBreakCleanup: true,
         DefaultsKey.keepAwakeAllowDisplaySleep: false,
         DefaultsKey.keepAwakeExternalDisplay: false,
         DefaultsKey.keepAwakeConnectedToPower: false,

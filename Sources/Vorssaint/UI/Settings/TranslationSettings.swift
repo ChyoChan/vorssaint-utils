@@ -9,6 +9,7 @@ struct TranslationSettings: View {
     @ObservedObject private var translation = TranslationService.shared
     @ObservedObject private var credentials = TranslationCredentials.shared
     @AppStorage(DefaultsKey.translationDoubleCopyEnabled) private var enabled = true
+    @AppStorage(DefaultsKey.translationPDFLineBreakCleanup) private var pdfLineBreakCleanup = true
     @AppStorage(DefaultsKey.translationPopupWidth) private var popupWidth = TranslationCompactLayout.defaultWidth
     @AppStorage(DefaultsKey.translationPopupFontSize) private var popupFontSize = TranslationCompactLayout.defaultFontSize
     @State private var keyDraft = ""
@@ -61,6 +62,11 @@ struct TranslationSettings: View {
                     Button(l10n.s.permissionOpenSettings) { permissions.requestAccessibility() }
                 }
                 Button(text.open) { translation.open() }
+                Divider()
+                Toggle(text.pdfLineBreakCleanup, isOn: $pdfLineBreakCleanup)
+                    .toggleStyle(.switch)
+                Text(text.pdfLineBreakCleanupCaption).font(.caption).foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
                 Divider()
                 Text(text.popupAppearance).font(.subheadline.weight(.medium))
                 HStack {

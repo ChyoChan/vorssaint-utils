@@ -13,6 +13,12 @@ struct TranslationStrings {
     }
     var title: String { t("Translation", "翻譯", "翻译") }
     var enable: String { t("Translate on double ⌘C", "連按兩次 ⌘C 翻譯", "连按两次 ⌘C 翻译") }
+    var pdfLineBreakCleanup: String { t("PDF line break cleanup", "PDF 換行整理", "PDF 换行整理") }
+    var pdfLineBreakCleanupCaption: String {
+        t("Join mid-sentence line breaks before translating, preserving blank paragraphs, list markers and indented text. The original stays editable. Turn off for text with intentional line breaks.",
+          "翻譯前合併句子中途的斷行，保留空白分段、清單標記及縮排文字。編輯時仍保留原文；如需逐行保留格式，可關閉此選項。",
+          "翻译前合并句子中途的断行，保留空白分段、列表标记和缩进文字。编辑时仍保留原文；如需逐行保留格式，可关闭此选项。")
+    }
     var caption: String {
         t("Select text, then press ⌘C twice within 0.7 seconds. Normal copying is unchanged.",
           "選取文字，於 0.7 秒內連按兩次 ⌘C。正常複製行為不變。",

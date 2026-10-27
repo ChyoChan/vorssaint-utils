@@ -326,6 +326,7 @@ if (( TEST )); then
         Sources/Vorssaint/Core/SoundPanelStrings.swift
         Sources/Vorssaint/Core/TranslationStrings.swift
         Sources/Vorssaint/Services/Translation/TranslationSupport.swift
+        Sources/Vorssaint/Services/Translation/TranslationLineBreakCleanup.swift
         Sources/Vorssaint/Services/Translation/GoogleTranslationClient.swift
         Sources/Vorssaint/Services/Translation/TranslationKeychain.swift
         Sources/Vorssaint/UI/MenuPanel/SoundPanelControls.swift

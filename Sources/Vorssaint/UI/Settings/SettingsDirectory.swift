@@ -183,6 +183,7 @@ enum SettingsDirectory {
                                                   TranslationStrings(language: language).engine,
                                                   TranslationStrings(language: language).popupAppearance,
                                                   TranslationStrings(language: language).popupFontSize,
+                                                  TranslationStrings(language: language).pdfLineBreakCleanup,
                                                   "Google", "API Key"],
                                        featureKeywords: [
                                         (.musicBlock, [s.musicBlockTitle, s.musicBlockSection]),

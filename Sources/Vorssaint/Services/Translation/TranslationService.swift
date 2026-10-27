@@ -398,7 +398,9 @@ final class TranslationService: NSObject, ObservableObject, NSWindowDelegate {
         message = nil
         busy = true
         copyToken = UUID()
-        let pending = TranslationRequest(text: input, source: source == "auto" ? nil : source,
+        let prepared = TranslationLineBreakCleanup.prepare(input, enabled:
+            UserDefaults.standard.bool(forKey: DefaultsKey.translationPDFLineBreakCleanup))
+        let pending = TranslationRequest(text: prepared, source: source == "auto" ? nil : source,
                                          target: target, engine: engine)
         request = pending
         guard engine == .google else { return }

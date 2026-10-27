@@ -5,6 +5,9 @@ import Foundation
 
 enum TranslationTests {
     static func run(_ suite: TestSuite) {
+        TranslationLineBreakCleanupTests.run { suite.expect($0, $1) }
+        suite.expect(Defaults.registeredDefaults[DefaultsKey.translationPDFLineBreakCleanup] as? Bool == true,
+                     "PDF line break cleanup is enabled by default")
         suite.expect(TranslationLanguageDefaults.source == "en" && TranslationLanguageDefaults.target == "zh-Hant",
                      "translation defaults to English into Traditional Chinese")
         suite.expect(Defaults.registeredDefaults[DefaultsKey.translationEngine] as? String == "apple",
