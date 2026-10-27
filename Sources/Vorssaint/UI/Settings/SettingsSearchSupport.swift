@@ -100,6 +100,28 @@ enum SettingsSearchSupport {
             feature: .brightness)
     }
 
+    static func translationItem(language: AppLanguage) -> SettingsSearchItem {
+        let text = TranslationStrings(language: language)
+        return SettingsSearchItem(
+            id: .setting(.translation),
+            destination: FeatureSettingsDestination(.general, sectionAnchor: .translation),
+            title: text.title, icon: "character.bubble",
+            keywords: [text.enable, text.engine, text.googleUsageTitle, text.googleUsageReminder,
+                       text.popupAppearance, text.popupWidth, text.popupFontSize,
+                       text.pdfLineBreakCleanup, text.chineseVoice, text.speakOriginal,
+                       text.speechOptions, text.speechRate, "Google", "API Key"])
+    }
+
+    static func developerUpdateItem(language: AppLanguage) -> SettingsSearchItem {
+        let text = DeveloperUpdateStrings(language: language)
+        return SettingsSearchItem(
+            id: .setting(.developerUpdateStatus),
+            destination: FeatureSettingsDestination(.about, sectionAnchor: .developerUpdateStatus),
+            title: text.title, icon: "arrow.triangle.2.circlepath",
+            keywords: [text.installedCommit, text.upstreamBase, text.pendingUpdates,
+                       text.lastTest, text.check, "GitHub"])
+    }
+
     /// A dedicated page row wins over a generated feature row only when their
     /// IDs, full destinations, and the page's one-to-one feature mapping all
     /// agree. The winning page keeps its stable identity and presentation while

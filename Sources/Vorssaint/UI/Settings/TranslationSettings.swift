@@ -92,6 +92,8 @@ struct TranslationSettings: View {
                     ), in: TranslationCompactLayout.widthRange, step: 10) {
                         Text(text.popupWidth)
                     }
+                    .labelsHidden()
+                    .accessibilityLabel(text.popupWidth)
                     Text("\(Int(TranslationCompactLayout.width(popupWidth))) pt")
                         .monospacedDigit().frame(width: 64, alignment: .trailing)
                 }
@@ -103,6 +105,8 @@ struct TranslationSettings: View {
                     ), in: TranslationCompactLayout.fontSizeRange, step: 1) {
                         Text(text.popupFontSize)
                     }
+                    .labelsHidden()
+                    .accessibilityLabel(text.popupFontSize)
                     Text("\(Int(TranslationCompactLayout.fontSize(popupFontSize))) pt")
                         .monospacedDigit().frame(width: 64, alignment: .trailing)
                 }

@@ -444,6 +444,45 @@ enum UpdateFeatureTests {
                 title: item.title, keywords: item.keywords)
         }, "search finds keyboard brightness shortcuts by their sidebar name in every language")
 
+        for language in AppLanguage.allCases {
+            let strings = Strings.localized(language)
+            let translation = TranslationStrings(language: language)
+            let updates = DeveloperUpdateStrings(language: language)
+            let translationItem = SettingsSearchSupport.translationItem(language: language)
+            let updateItem = SettingsSearchSupport.developerUpdateItem(language: language)
+            let pages = [
+                SettingsSearchItem(id: .page(.general), destination: FeatureSettingsDestination(.general),
+                                   title: strings.tabGeneral, icon: "gearshape"),
+                SettingsSearchItem(id: .page(.about), destination: FeatureSettingsDestination(.about),
+                                   title: strings.tabAbout, icon: "info.circle"),
+            ]
+            for (item, queries) in [
+                (translationItem, [translation.title, translation.googleUsageTitle,
+                                   translation.pdfLineBreakCleanup, translation.speechOptions,
+                                   translation.popupWidth, "API Key"]),
+                (updateItem, [updates.title, updates.pendingUpdates,
+                              updates.installedCommit, updates.lastTest]),
+            ] {
+                suite.expect(item.destination.hasValidSectionAnchor,
+                             "standalone settings search targets an anchor on the right page")
+                for query in queries {
+                    let groups = SettingsSearchSupport.groupedMatchingItems(
+                        query: query, items: pages + [translationItem, updateItem],
+                        isAvailable: { _ in false })
+                    let matches = groups.flatMap(\.suggestions).filter { $0.item.id == item.id }
+                    suite.expect(matches.count == 1 && matches.allSatisfy {
+                        SettingsSearchSupport.route(for: $0, isAvailable: { _ in false }).destination
+                            == item.destination
+                    }, "searching \(query) opens its section instead of the containing page")
+                }
+            }
+        }
+        let chineseStatus = SettingsSearchSupport.developerUpdateItem(language: .zhHK)
+        for query in ["自訂版", "上游", "提交", "測試"] {
+            suite.expect(SettingsSearchSupport.matchingItems(query: query, items: [chineseStatus]).count == 1,
+                         "a short Chinese update-status query finds the custom build section: \(query)")
+        }
+
         let settingsFeatureTitles: [AppFeature: String] = [
             .homebrew: "Homebrew",
             .cameraPreview: "Camera Preview",

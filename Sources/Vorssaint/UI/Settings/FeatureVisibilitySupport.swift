@@ -17,6 +17,8 @@ enum SettingsPage: Hashable {
 /// be added but never renamed.
 enum SettingsSectionAnchor: String, CaseIterable, Hashable {
     case panelConfiguration
+    case translation
+    case developerUpdateStatus
     case mixer
     case audioPriority
     case musicBlocking
@@ -59,9 +61,10 @@ enum SettingsSectionAnchor: String, CaseIterable, Hashable {
 
     var page: SettingsPage {
         switch self {
-        case .panelConfiguration, .mixer, .audioPriority, .musicBlocking,
+        case .panelConfiguration, .translation, .mixer, .audioPriority, .musicBlocking,
              .soundOutputSwitcher:
             return .general
+        case .developerUpdateStatus: return .about
         case .keepAwake, .brightness, .extraBrightness, .bluetoothSleep: return .energy
         case .scrollDirection, .focusFollowsMouse, .smoothScroll, .linearScroll, .mouseAcceleration, .mouseNavigation, .mouseButtonShortcuts,
              .middleClick, .mouseClickDebounce:

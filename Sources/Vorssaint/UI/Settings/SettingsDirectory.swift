@@ -160,6 +160,10 @@ enum SettingsDirectory {
                 .general, sectionAnchor: .panelConfiguration),
             title: s.menuBarSection, icon: "menubar.rectangle",
             keywords: [s.showMenuBarIcon, FeatureStrings.generalSettings(language).menuBarIconTitle, "SF Symbols"]))
+        items.append(SettingsSearchSupport.translationItem(language: language))
+        if AppInfo.isDeveloperBuild {
+            items.append(SettingsSearchSupport.developerUpdateItem(language: language))
+        }
         if BrightnessService.keyboardLightIsSupported {
             items.append(SettingsSearchSupport.keyboardBrightnessShortcutItem(language: language))
         }
@@ -177,20 +181,7 @@ enum SettingsDirectory {
                 SettingsDirectoryItem(page: .general, title: s.tabGeneral, icon: "gearshape",
                                        keywords: [s.launchAtLogin, s.languageLabel,
                                                   FeatureStrings.appearance(language).label,
-                                                  FeatureStrings.appearance(language).dark,
-                                                  TranslationStrings(language: language).title,
-                                                  TranslationStrings(language: language).enable,
-                                                  TranslationStrings(language: language).engine,
-                                                  TranslationStrings(language: language).googleUsageTitle,
-                                                  TranslationStrings(language: language).googleUsageReminder,
-                                                  TranslationStrings(language: language).popupAppearance,
-                                                  TranslationStrings(language: language).popupFontSize,
-                                                  TranslationStrings(language: language).pdfLineBreakCleanup,
-                                                  TranslationStrings(language: language).chineseVoice,
-                                                  TranslationStrings(language: language).speakOriginal,
-                                                  TranslationStrings(language: language).speechOptions,
-                                                  TranslationStrings(language: language).speechRate,
-                                                  "Google", "API Key"],
+                                                  FeatureStrings.appearance(language).dark],
                                        featureKeywords: [
                                         (.musicBlock, [s.musicBlockTitle, s.musicBlockSection]),
                                        ]),

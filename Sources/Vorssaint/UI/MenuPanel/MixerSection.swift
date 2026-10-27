@@ -1037,6 +1037,10 @@ private struct MixerRow: View {
     /// always agree and the reset hides exactly when the row reads 100%.
     private var isBoosting: Bool { (app.volume * 100).rounded() > 100 }
     private var isAtUnity: Bool { (app.volume * 100).rounded() == 100 }
+    private var isMuted: Bool { app.volume <= 0.001 }
+    private var muteActionLabel: String {
+        "\(isMuted ? l10n.s.actionUnmute : l10n.s.actionMute): \(app.name)"
+    }
 
     /// SoundSource-sized icon spanning the row's two lines (issue #166); the
     /// bitmap must be requested at this size or the upscale looks blurry.
@@ -1144,14 +1148,18 @@ private struct MixerRow: View {
                         Button {
                             mixer.toggleMute(app)
                         } label: {
-                            Image(systemName: app.volume <= 0.001 ? "speaker.slash.fill" : "speaker.wave.2.fill")
+                            Image(systemName: isMuted ? "speaker.slash.fill" : "speaker.wave.2.fill")
                                 .font(.system(size: 10))
-                                .foregroundStyle(app.volume <= 0.001
+                                .foregroundStyle(isMuted
                                                  ? PanelMetricColor.red(for: colorScheme)
                                                  : Color.secondary)
                                 .frame(width: 16)
                         }
                         .buttonStyle(.plain)
+                        .help(muteActionLabel)
+                        .accessibilityLabel(muteActionLabel)
+                        .accessibilityValue("\(MixerRoutingSupport.displayPercent(forVolume: app.volume))%")
+                        .accessibilityAddTraits(isMuted ? .isSelected : [])
                     }
 
                     if app.supportsVolumeOverride {

@@ -29,6 +29,7 @@ struct GeneralSettings: View {
                 basicsCard
                 appearanceCard
                 TranslationSettings()
+                    .settingsSectionAnchor(.translation, cornerRadius: 16)
                 if AppFeature.keepAwake.isAvailable {
                     shortcutCard
                 }

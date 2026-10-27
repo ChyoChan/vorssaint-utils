@@ -541,6 +541,7 @@ struct SettingsView: View {
             return
         }
         guard router.destination.sectionAnchor != nil,
+              router.destination.sectionAnchor != .translation,
               !sidebarItems.contains(where: { $0.destination == router.destination }) else { return }
         switch router.page {
         case .general:
@@ -731,6 +732,7 @@ struct AboutSettings: View {
 
             if AppInfo.isDeveloperBuild {
                 DeveloperUpdateStatusSection()
+                    .settingsFormSectionAnchor(.developerUpdateStatus)
             } else {
                 UpdatesView()
             }
