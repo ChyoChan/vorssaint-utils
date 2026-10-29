@@ -35,6 +35,20 @@ enum TranslationTests {
         }
         suite.expect(TranslationLanguageDefaults.languages == ["zh-Hant", "en", "ja"],
                      "both language pickers expose only Traditional Chinese, English and Japanese")
+        suite.expect(TranslationRecentLanguages.list(nil) == ["en", "ja", "zh-Hant"],
+                     "new language tabs use the reference order before any language has been used")
+        suite.expect(TranslationRecentLanguages.list(["auto", "ko", "ja", "ja", "zh-Hans", "en"]) == ["ja", "en", "zh-Hant"],
+                     "recent language tabs remove duplicates, automatic detection and unavailable languages")
+        var recent = TranslationRecentLanguages.list(nil)
+        for language in ["ja", "zh-Hant", "en", "ja"] {
+            recent = TranslationRecentLanguages.recording(language, in: recent)
+            suite.expect(recent.first == language && recent.count == 3 && Set(recent).count == 3,
+                         "using a language promotes it without duplicating or dropping quick choices")
+        }
+        suite.expect(recent == ["ja", "en", "zh-Hant"] &&
+                     TranslationRecentLanguages.recording("auto", in: recent) == recent &&
+                     TranslationRecentLanguages.recording("fr", in: recent) == recent,
+                     "recent language order reflects usage while unsupported selections cannot enter history")
         suite.expect(TranslationLanguageDefaults.languages.contains(TranslationLanguageDefaults.source) &&
                      TranslationLanguageDefaults.languages.contains(TranslationLanguageDefaults.target),
                      "default language selections remain available after menu simplification")

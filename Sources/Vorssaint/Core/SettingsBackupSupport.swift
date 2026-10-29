@@ -103,6 +103,8 @@ enum SettingsBackupSupport {
     static let machineStateKeys: Set<String> = [
         DefaultsKey.translationGoogleUsage,
         DefaultsKey.translationGoogleUsageReminderMonth,
+        DefaultsKey.translationRecentSourceLanguages,
+        DefaultsKey.translationRecentTargetLanguages,
         DefaultsKey.displaysSwitchedOff,
         DefaultsKey.displaysSwitchedOffFingerprints,
         // Codex homes are folders on this Mac whose sign-in the cards use,

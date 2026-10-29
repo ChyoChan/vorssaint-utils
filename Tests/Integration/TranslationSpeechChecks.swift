@@ -37,7 +37,8 @@ enum TranslationSpeechChecks {
         let defaults = UserDefaults.standard
         let keys = [DefaultsKey.translationEngine, DefaultsKey.translationChineseVoice,
                     DefaultsKey.translationPopupWidth, DefaultsKey.translationDoubleCopyEnabled,
-                    DefaultsKey.translationSpeechVoices, DefaultsKey.translationSpeechRate]
+                    DefaultsKey.translationSpeechVoices, DefaultsKey.translationSpeechRate,
+                    DefaultsKey.translationRecentSourceLanguages, DefaultsKey.translationRecentTargetLanguages]
         let saved = keys.map { defaults.object(forKey: $0) }
         defer {
             for (index, key) in keys.enumerated() {

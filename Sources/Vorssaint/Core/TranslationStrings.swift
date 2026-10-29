@@ -43,6 +43,16 @@ struct TranslationStrings {
     var source: String { t("Original", "原文") }
     var result: String { t("Translation", "譯文", "译文") }
     var auto: String { t("Detect language", "自動辨識", "自动识别") }
+    var chooseLanguage: String { t("Choose language", "選擇語言", "选择语言") }
+    func languageName(_ identifier: String) -> String {
+        switch identifier {
+        case "en": return t("English", "英文")
+        case "ja": return t("Japanese", "日文")
+        case "zh-Hant": return t("Chinese (Traditional)", "中文（繁體）", "中文（繁体）")
+        case "auto": return auto
+        default: return Locale(identifier: language.rawValue).localizedString(forIdentifier: identifier) ?? identifier
+        }
+    }
     var translate: String { t("Translate", "翻譯", "翻译") }
     var copy: String { t("Copy translation", "複製譯文", "复制译文") }
     var copied: String { t("Copied", "已複製", "已复制") }

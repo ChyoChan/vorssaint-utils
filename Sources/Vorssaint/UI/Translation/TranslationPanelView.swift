@@ -64,12 +64,12 @@ struct TranslationPanelView: View {
         VStack(spacing: 10) {
             HStack(spacing: 10) {
                 Image(systemName: "character.bubble").font(.title3).accessibilityHidden(true)
-                languagePicker(text.to, selection: targetSelection, detectsLanguage: false)
-                    .frame(maxWidth: 220)
                 Spacer(minLength: 0)
                 enginePicker
                 closeButton
             }
+            languagePicker(text.to, selection: targetSelection, detectsLanguage: false)
+                .frame(maxWidth: .infinity, alignment: .leading)
             resultText(compact: true)
                 .background(Color(nsColor: .textBackgroundColor), in: RoundedRectangle(cornerRadius: 6))
                 .overlay(RoundedRectangle(cornerRadius: 6).stroke(Color(nsColor: .separatorColor)))
@@ -117,17 +117,20 @@ struct TranslationPanelView: View {
             .padding(.horizontal, 16)
             .padding(.vertical, 10)
             Divider()
-            HStack(spacing: 16) {
-                languagePicker(text.from, selection: sourceSelection, detectsLanguage: true)
-                Button { model.swapLanguages() } label: {
-                    Image(systemName: "arrow.left.arrow.right")
+            ViewThatFits(in: .horizontal) {
+                HStack(spacing: 12) {
+                    editorLanguageSelector(source: true)
+                    swapButton
+                    editorLanguageSelector(source: false)
                 }
-                .buttonStyle(.borderless)
-                .frame(width: 28, height: 28)
-                .accessibilityLabel(text.swap)
-                .help(text.swap)
-                .disabled(model.source == "auto" || model.busy)
-                languagePicker(text.to, selection: targetSelection, detectsLanguage: false)
+                VStack(alignment: .leading, spacing: 8) {
+                    HStack(spacing: 8) {
+                        editorLanguageSelector(source: true)
+                        Spacer(minLength: 0)
+                        swapButton
+                    }
+                    editorLanguageSelector(source: false)
+                }
             }
             .padding(.horizontal, 24)
             .padding(.vertical, 12)
@@ -280,8 +283,8 @@ struct TranslationPanelView: View {
             }
             .onPreferenceChange(TranslationResultHeight.self) { height in
                 guard compact, height > 0 else { return }
-                // Header (28), footer (32), spacing (20), padding (24).
-                model.fitCompactContent(height: height + 104)
+                // Header (28), languages (36), footer (32), spacing (30), padding (24).
+                model.fitCompactContent(height: height + 150)
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .accessibilityLabel(compact ? text.title : text.result)
@@ -300,19 +303,29 @@ struct TranslationPanelView: View {
     }
 
     private func languagePicker(_ title: String, selection: Binding<String>, detectsLanguage: Bool) -> some View {
-        Picker(title, selection: selection) {
-            if detectsLanguage { Text(text.auto).tag("auto") }
-            ForEach(TranslationLanguageDefaults.languages, id: \.self) { language in
-                Text(languageName(language)).tag(language)
-            }
-        }
-        .labelsHidden()
-        .accessibilityLabel(title)
-        .frame(maxWidth: .infinity)
+        TranslationLanguageSelector(title: title, selection: selection,
+            recentLanguages: detectsLanguage ? model.recentSourceLanguages : model.recentTargetLanguages,
+            detectsLanguage: detectsLanguage)
     }
 
-    private func languageName(_ identifier: String) -> String {
-        Locale(identifier: l10n.language.rawValue).localizedString(forIdentifier: identifier) ?? identifier
+    private func editorLanguageSelector(source: Bool) -> some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text(source ? text.from : text.to).font(.caption).foregroundStyle(.secondary)
+            languagePicker(source ? text.from : text.to,
+                selection: source ? sourceSelection : targetSelection, detectsLanguage: source)
+        }
+        .fixedSize(horizontal: true, vertical: false)
+    }
+
+    private var swapButton: some View {
+        Button { model.swapLanguages() } label: {
+            Image(systemName: "arrow.left.arrow.right")
+        }
+        .buttonStyle(.borderless)
+        .frame(width: 28, height: 28)
+        .accessibilityLabel(text.swap)
+        .help(text.swap)
+        .disabled(model.source == "auto" || model.busy)
     }
 }
 

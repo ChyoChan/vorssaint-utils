@@ -15,6 +15,10 @@ final class TranslationService: NSObject, ObservableObject, NSWindowDelegate, AV
     @Published var input = ""
     @Published var source = TranslationLanguageDefaults.source
     @Published var target = TranslationLanguageDefaults.target
+    @Published private(set) var recentSourceLanguages = TranslationRecentLanguages.list(
+        UserDefaults.standard.stringArray(forKey: DefaultsKey.translationRecentSourceLanguages))
+    @Published private(set) var recentTargetLanguages = TranslationRecentLanguages.list(
+        UserDefaults.standard.stringArray(forKey: DefaultsKey.translationRecentTargetLanguages))
     @Published private(set) var output = ""
     @Published private(set) var message: String?
     @Published private(set) var busy = false
@@ -80,6 +84,12 @@ final class TranslationService: NSObject, ObservableObject, NSWindowDelegate, AV
     }
 
     func syncWithPreferences() {
+        let sourceHistory = TranslationRecentLanguages.list(
+            UserDefaults.standard.stringArray(forKey: DefaultsKey.translationRecentSourceLanguages))
+        let targetHistory = TranslationRecentLanguages.list(
+            UserDefaults.standard.stringArray(forKey: DefaultsKey.translationRecentTargetLanguages))
+        if sourceHistory != recentSourceLanguages { recentSourceLanguages = sourceHistory }
+        if targetHistory != recentTargetLanguages { recentTargetLanguages = targetHistory }
         let enabled = UserDefaults.standard.bool(forKey: DefaultsKey.translationDoubleCopyEnabled)
         let wasEnabled = shortcutWasEnabled
         shortcutWasEnabled = enabled
@@ -416,12 +426,14 @@ final class TranslationService: NSObject, ObservableObject, NSWindowDelegate, AV
     }
 
     func setSource(_ value: String) {
+        rememberLanguage(value, isSource: true)
         guard source != value else { return }
         source = value
         languagesDidChange()
     }
 
     func setTarget(_ value: String) {
+        rememberLanguage(value, isSource: false)
         guard target != value else { return }
         target = value
         languagesDidChange()
@@ -432,6 +444,8 @@ final class TranslationService: NSObject, ObservableObject, NSWindowDelegate, AV
         let originalSource = source
         source = target
         target = originalSource
+        rememberLanguage(source, isSource: true)
+        rememberLanguage(target, isSource: false)
         if !output.isEmpty { input = output }
         languagesDidChange()
     }
@@ -441,10 +455,22 @@ final class TranslationService: NSObject, ObservableObject, NSWindowDelegate, AV
         if !input.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { translate() }
     }
 
+    private func rememberLanguage(_ language: String, isSource: Bool) {
+        let current = isSource ? recentSourceLanguages : recentTargetLanguages
+        let updated = TranslationRecentLanguages.recording(language, in: current)
+        guard updated != current else { return }
+        if isSource { recentSourceLanguages = updated }
+        else { recentTargetLanguages = updated }
+        UserDefaults.standard.set(updated, forKey: isSource
+            ? DefaultsKey.translationRecentSourceLanguages : DefaultsKey.translationRecentTargetLanguages)
+    }
+
     func translate() {
         stopSpeech()
         do { _ = try TranslationTextPlan.validate(input) }
         catch { message = inputMessage(error); return }
+        rememberLanguage(source, isSource: true)
+        rememberLanguage(target, isSource: false)
         cloudTask?.cancel()
         cloudTask = nil
         generation.advance()

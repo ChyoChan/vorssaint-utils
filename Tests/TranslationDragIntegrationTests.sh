@@ -8,6 +8,7 @@
 # --engine-only checks the picker in hidden windows without synthetic input.
 # --usage-only checks notification deadlocks with memory-only settings and fake HTTP, without windows.
 # --scroll-only checks initial result positioning in native panels using fixture text and fake speech.
+# --language-only checks language history and renders hidden selector/editor fixtures.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 translation_drag_dir=$(mktemp -d /private/tmp/vorssaint-translation-drag.XXXXXX)
@@ -21,6 +22,7 @@ swiftc -parse-as-library -target "$translation_drag_arch-apple-macos15.0" -sdk "
     Tests/Integration/TranslationDragChecks.swift \
     Tests/Integration/TranslationSpeechChecks.swift \
     Tests/Integration/TranslationScrollChecks.swift \
+    Tests/Integration/TranslationLanguageChecks.swift \
     Sources/Vorssaint/Services/Translation/TranslationService.swift \
     Sources/Vorssaint/Services/Translation/TranslationSupport.swift \
     Sources/Vorssaint/Services/Translation/TranslationSpeechSupport.swift \
@@ -29,6 +31,7 @@ swiftc -parse-as-library -target "$translation_drag_arch-apple-macos15.0" -sdk "
     Sources/Vorssaint/Services/Translation/GoogleTranslationUsageStore.swift \
     Sources/Vorssaint/Core/TranslationStrings.swift \
     Sources/Vorssaint/UI/Translation/TranslationPanelView.swift \
+    Sources/Vorssaint/UI/Translation/TranslationLanguageSelector.swift \
     Sources/Vorssaint/UI/Settings/GoogleTranslationUsageView.swift \
     Sources/Vorssaint/UI/Settings/TranslationSpeechSettings.swift \
     Sources/Vorssaint/Services/GeneralPasteboardAccess.swift \

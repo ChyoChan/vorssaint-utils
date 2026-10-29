@@ -20,6 +20,8 @@ final class Permissions: ObservableObject {
 enum DefaultsKey {
     static let translationDoubleCopyEnabled = "fixtureDoubleCopyEnabled"
     static let translationEngine = "fixtureEngine"
+    static let translationRecentSourceLanguages = "fixtureRecentSourceLanguages"
+    static let translationRecentTargetLanguages = "fixtureRecentTargetLanguages"
     static let translationGoogleUsage = "fixtureGoogleUsage"
     static let translationGoogleUsageReminderEnabled = "fixtureGoogleUsageReminderEnabled"
     static let translationGoogleUsageReminderMonth = "fixtureGoogleUsageReminderMonth"
@@ -225,6 +227,10 @@ private final class NotifyingUsageDefaults: UserDefaults, @unchecked Sendable {
 
     static func main() {
         setbuf(stdout, nil)
+        if CommandLine.arguments.contains("--language-only") {
+            TranslationLanguageChecks.run()
+            return
+        }
         if CommandLine.arguments.contains("--scroll-only") {
             TranslationScrollChecks.run()
             return
@@ -260,12 +266,18 @@ private final class NotifyingUsageDefaults: UserDefaults, @unchecked Sendable {
         let originalPointer = NSEvent.mouseLocation
         let preferences = UserDefaults.standard
         let storedEngine = preferences.object(forKey: DefaultsKey.translationEngine)
+        let recentKeys = [DefaultsKey.translationRecentSourceLanguages, DefaultsKey.translationRecentTargetLanguages]
+        let storedRecents = recentKeys.map { preferences.object(forKey: $0) }
         preferences.register(defaults: [DefaultsKey.translationPopupWidth: TranslationCompactLayout.defaultWidth,
                                        DefaultsKey.translationPopupFontSize: TranslationCompactLayout.defaultFontSize,
                                        DefaultsKey.translationPDFLineBreakCleanup: true])
         defer {
             if let storedEngine { preferences.set(storedEngine, forKey: DefaultsKey.translationEngine) }
             else { preferences.removeObject(forKey: DefaultsKey.translationEngine) }
+            for (index, key) in recentKeys.enumerated() {
+                if let value = storedRecents[index] { preferences.set(value, forKey: key) }
+                else { preferences.removeObject(forKey: key) }
+            }
             preferences.removeObject(forKey: DefaultsKey.translationPopupWidth)
             preferences.removeObject(forKey: DefaultsKey.translationPopupFontSize)
             preferences.removeObject(forKey: DefaultsKey.translationPDFLineBreakCleanup)

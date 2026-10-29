@@ -13,6 +13,26 @@ enum TranslationLanguageDefaults {
     static let languages = ["zh-Hant", "en", "ja"]
 }
 
+enum TranslationRecentLanguages {
+    static let fallback = ["en", "ja", "zh-Hant"]
+
+    static func list(_ saved: [String]?) -> [String] {
+        var result: [String] = []
+        for language in (saved ?? []) + fallback {
+            if TranslationLanguageDefaults.languages.contains(language), !result.contains(language) {
+                result.append(language)
+            }
+            if result.count == 3 { break }
+        }
+        return result
+    }
+
+    static func recording(_ language: String, in saved: [String]?) -> [String] {
+        guard TranslationLanguageDefaults.languages.contains(language) else { return list(saved) }
+        return list([language] + (saved ?? []))
+    }
+}
+
 /// Presentation is independent of the request: expanding must not restart a
 /// translation or discard the copied original.
 enum TranslationPresentation: Equatable {

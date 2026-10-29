@@ -18,7 +18,8 @@ enum TranslationScrollChecks {
         }
         let defaults = UserDefaults.standard
         let keys = [DefaultsKey.translationEngine, DefaultsKey.translationPopupWidth,
-                    DefaultsKey.translationPopupFontSize, DefaultsKey.translationDoubleCopyEnabled]
+                    DefaultsKey.translationPopupFontSize, DefaultsKey.translationDoubleCopyEnabled,
+                    DefaultsKey.translationRecentSourceLanguages, DefaultsKey.translationRecentTargetLanguages]
         let saved = keys.map { defaults.object(forKey: $0) }
         let savedLanguage = L10n.shared.language
         defer {
