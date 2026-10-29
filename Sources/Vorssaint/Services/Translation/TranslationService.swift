@@ -24,7 +24,6 @@ final class TranslationService: NSObject, ObservableObject, NSWindowDelegate, AV
     @Published private(set) var busy = false
     @Published private(set) var copied = false
     @Published private(set) var request: TranslationRequest?
-    @Published private(set) var listening = false
     @Published private(set) var presentation: TranslationPresentation = .editor
     @Published private(set) var speakingPart: TranslationSpeechPart?
     @Published private(set) var speechMessage: String?
@@ -36,7 +35,6 @@ final class TranslationService: NSObject, ObservableObject, NSWindowDelegate, AV
     @Published private(set) var engine = TranslationEngine(
         rawValue: UserDefaults.standard.string(forKey: DefaultsKey.translationEngine) ?? "") ?? .apple
     var privacyNotice: String { engine == .apple ? strings.privacy : strings.googlePrivacy }
-    var engineName: String { engine == .apple ? strings.localEngine : strings.googleEngine }
     private var cloudTask: Task<Void, Never>?
     private var speechSynthesizer: AVSpeechSynthesizer?
     private let speechVoices: () -> [AVSpeechSynthesisVoice]
@@ -127,7 +125,6 @@ final class TranslationService: NSObject, ObservableObject, NSWindowDelegate, AV
             self?.observe(event)
             return event
         }
-        listening = globalMonitor != nil
     }
 
     func checkGoogleUsageReminder(at date: Date = Date()) {
@@ -162,7 +159,6 @@ final class TranslationService: NSObject, ObservableObject, NSWindowDelegate, AV
         globalMonitor = nil
         localMonitor = nil
         detector = TranslationDoubleCopyDetector()
-        listening = false
     }
 
     private func observe(_ event: NSEvent) {

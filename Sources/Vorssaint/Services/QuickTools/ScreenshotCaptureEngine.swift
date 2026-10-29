@@ -33,18 +33,6 @@ enum ScreenshotCaptureEngine {
                                     includePointer: includePointer)
     }
 
-    static func captureDisplayRegion(displayID: CGDirectDisplayID,
-                                     pixelRect: CGRect,
-                                     includePointer: Bool,
-                                     hideVorssaintWindows: Bool,
-                                     protectedWindowIDs: Set<CGWindowID>) async -> CGImage? {
-        guard let capture = await prepareDisplayRegion(
-            displayID: displayID, pixelRect: pixelRect, includePointer: includePointer,
-            hideVorssaintWindows: hideVorssaintWindows, protectedWindowIDs: protectedWindowIDs)
-        else { return nil }
-        return await capture.image()
-    }
-
     /// Immutable capture configuration owned by one scrolling session. Resolving
     /// shareable windows for every frame adds latency and loses page overlap.
     final class RegionCapture: @unchecked Sendable {

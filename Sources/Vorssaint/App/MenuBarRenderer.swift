@@ -221,10 +221,6 @@ enum MenuBarBlockStyle {
 enum MenuBarRenderer {
     private static let stackedFontSize: CGFloat = 9.4
     private static let singleLineFontSize: CGFloat = 11.6
-    private static let statusTextGapColumns = 1
-    private static let countdownColumns = 7
-    private static let glyphAndButtonChrome: CGFloat = 26
-    private static let separatorWidth = 3
     private static let rateBlockReservedLines = [
         "↓999Kb", "↑999Kb", "R8888B", "W8888B",
         "↓8888M", "↑8888M", "R8888M", "W8888M",
@@ -241,12 +237,6 @@ enum MenuBarRenderer {
     /// Estimated bitmap bytes of a rendered block at 2x backing scale.
     private static func blockImageCost(_ image: NSImage) -> Int {
         max(1, Int(image.size.width * image.size.height) * 16)
-    }
-
-    private struct MetricItem {
-        var metric: MenuBarMetric
-        var segments: [MenuBarSegment]
-        var width: Int
     }
 
     static func lines(for snapshot: SystemSnapshot,
@@ -302,40 +292,6 @@ enum MenuBarRenderer {
         let baseWidth: CGFloat = style == .readable ? 21 : 19
         return CGSize(width: baseWidth + (showsPressure ? 7 : 0),
                       height: style == .readable ? 22 : 20)
-    }
-
-    static func reservedStatusItemLength(for metrics: [MenuBarMetric],
-                                         includesCountdown: Bool,
-                                         allowStacked: Bool = true) -> CGFloat {
-        let preset = MenuBarPreset.current
-        let stacked = !includesCountdown && estimatedUsesStackedLayout(for: metrics,
-                                                                       preset: preset,
-                                                                       allowStacked: allowStacked)
-        let font = statusFont(stacked: stacked)
-        let estimated = NSMutableAttributedString()
-        if includesCountdown {
-            estimated.append(NSAttributedString(string: "888 min  "))
-        }
-        let fanCount = metrics.contains(.fanSpeed) ? SystemMonitor.fanTelemetryCount : 0
-        estimated.append(attributed(for: estimatedSnapshot(fanCount: fanCount),
-                                    metrics: metrics,
-                                    allowStacked: allowStacked && !includesCountdown,
-                                    linePrefix: includesCountdown ? " " : ""))
-        guard estimated.length > 0 else { return NSStatusItem.variableLength }
-
-        estimated.addAttribute(.font, value: font, range: NSRange(location: 0, length: estimated.length))
-        let rect = estimated.boundingRect(with: NSSize(width: 2000, height: 80),
-                                          options: [.usesLineFragmentOrigin, .usesFontLeading])
-        return ceil(glyphAndButtonChrome + rect.width + 8)
-    }
-
-    static func reservedContentColumns(for metrics: [MenuBarMetric],
-                                       includesCountdown: Bool,
-                                       allowStacked: Bool = true) -> Int {
-        let columns = reservedColumns(for: metrics,
-                                      includesCountdown: includesCountdown,
-                                      allowStacked: allowStacked)
-        return columns > 0 ? columns + statusTextGapColumns : 0
     }
 
     private static func blockSegments(for snapshot: SystemSnapshot,
@@ -624,78 +580,6 @@ enum MenuBarRenderer {
                                          minimumValue: "999°",
                                          style: style,
                                          pressure: nil))
-        }
-        return segments
-    }
-
-    private static func estimatedUsesStackedLayout(for metrics: [MenuBarMetric],
-                                                   preset: MenuBarPreset,
-                                                   allowStacked: Bool) -> Bool {
-        false
-    }
-
-    private static func reservedColumns(for metrics: [MenuBarMetric],
-                                        includesCountdown: Bool,
-                                        allowStacked: Bool) -> Int {
-        let preset = MenuBarPreset.current
-        let items = estimatedMetricItems(for: metrics, preset: preset)
-        guard !items.isEmpty else { return includesCountdown ? countdownColumns : 0 }
-
-        if includesCountdown {
-            return countdownColumns + 2 + joinedWidth(items, usesSeparators: true)
-        }
-
-        return joinedWidth(items, usesSeparators: preset != .dense)
-    }
-
-    private static func estimatedMetricItems(for metrics: [MenuBarMetric],
-                                             preset: MenuBarPreset) -> [MetricItem] {
-        metrics.map {
-            MetricItem(metric: $0, segments: [], width: reservedWidth(for: $0, preset: preset))
-        }
-    }
-
-    private static func reservedWidth(for metric: MenuBarMetric, preset: MenuBarPreset) -> Int {
-        switch (preset, metric) {
-        case (_, .cpu), (_, .gpu):
-            return 11      // symbol + " CPU 100%"
-        case (_, .memory):
-            return MemoryMenuBarStyle.current.showsDot ? 13 : 11
-        case (_, .cpuTemperature), (_, .gpuTemperature), (_, .batteryTemperature):
-            return 11      // symbol + " CPU 999°" / " GPU 999°" / " BAT 999°"
-        case (_, .peripheralBattery):
-            return 12      // symbol + " KBD 100%+9"
-        case (_, .network):
-            return 15      // down symbol + 999Kb/1023K + up symbol + 999Kb/1023K
-        case (_, .diskUsage):
-            return DiskMenuBarStyle.current.showsPercentage ? 11 : 14
-        case (_, .diskActivity):
-            return 15      // R1.0G + W1.0G
-        case (_, .battery), (_, .power):
-            return 11      // symbol + " BAT 100%" / " PWR 99W"
-        case (_, .batteryTime):
-            return 12      // clock symbol + "99h 59m"
-        case (_, .connectedDevices):
-            return 6       // symbol + " 99"
-        case (_, .fanSpeed):
-            let count = max(1, SystemMonitor.fanTelemetryCount)
-            return FanControlPolicy.menuBarWidthUnits(fanCount: count)
-        }
-    }
-
-    private static func joinedWidth(_ items: [MetricItem], usesSeparators: Bool) -> Int {
-        let separatorColumns = usesSeparators ? separatorWidth : 1
-        let separators = max(0, items.count - 1) * separatorColumns
-        return items.reduce(0) { $0 + $1.width } + separators
-    }
-
-    private static func joined(_ items: [MetricItem], usesSeparators: Bool) -> [MenuBarSegment] {
-        var segments: [MenuBarSegment] = []
-        for item in items {
-            if !segments.isEmpty {
-                segments.append(usesSeparators ? .separator : .text(" "))
-            }
-            segments.append(contentsOf: item.segments)
         }
         return segments
     }
@@ -1158,53 +1042,6 @@ enum MenuBarRenderer {
         case .early: return .systemOrange
         case .none: return nil
         }
-    }
-
-    private static func estimatedSnapshot(fanCount: Int) -> SystemSnapshot {
-        var snapshot = SystemSnapshot()
-        snapshot.cpuUsage = 1
-        snapshot.gpuUsage = 1
-        snapshot.memoryUsed = 100
-        snapshot.memoryAppUsed = 100
-        snapshot.memoryTotal = 100
-        snapshot.memoryPressure = .normal
-        snapshot.cpuTemperature = 125
-        snapshot.gpuTemperature = 125
-        snapshot.batteryTemperature = 125
-        snapshot.fanSpeeds = Array(repeating: 20_000, count: fanCount)
-        snapshot.netDownBytesPerSec = 1_000_000_000
-        snapshot.netUpBytesPerSec = 1_000_000_000
-        snapshot.disk = DiskReading(devices: [
-            DiskDeviceReading(id: "main",
-                              name: "Macintosh HD",
-                              mountPath: "/",
-                              bsdName: "disk3s1",
-                              wholeDisk: "disk3",
-                              ioCounterID: "disk3",
-                              fileSystem: "APFS",
-                              totalBytes: 1_000_000_000_000,
-                              freeBytes: 0,
-                              purgeableBytes: nil,
-                              usedBytes: 1_000_000_000_000,
-                              isInternal: true,
-                              isRemovable: false,
-                              isEjectable: false,
-                              smart: nil,
-                              readBytesPerSec: 1_000_000_000,
-                              writeBytesPerSec: 1_000_000_000,
-                              totalReadBytes: nil,
-                              totalWrittenBytes: nil),
-        ])
-        var power = PowerReading()
-        power.systemWatts = 99
-        power.chargePercent = 100
-        power.timeRemainingSeconds = 359_940
-        power.isCharging = true
-        snapshot.power = power
-        snapshot.peripheralBatteries = [
-            PeripheralBatteryDevice(id: "mouse", name: "Magic Mouse", percent: 100, kind: .mouse),
-        ]
-        return snapshot
     }
 
     private static func primaryDisk(from reading: DiskReading?) -> DiskDeviceReading? {

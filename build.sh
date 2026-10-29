@@ -617,6 +617,7 @@ if (( TEST )); then
         ./Tests/PreferenceCleanupTests.sh || test_status=1
         ./Tests/UninstallSpacesTests.sh || test_status=1
         ./Tests/DeveloperInstallIsolationTests.sh || test_status=1
+        zsh Tests/ComponentSigningTests.sh || test_status=1
         python3 Tests/DeveloperBuildStatusToolTests.py || test_status=1
     fi
     discard_test_preferences || test_status=1
@@ -795,29 +796,16 @@ codesign_app() {
     fi
 }
 
-codesign_fan_helper() {
-    local target="$1"
+codesign_component() {
+    local target="$1" identifier="$2"
     if [[ -n "$DEVID" ]]; then
         codesign_with_timestamp_retry --force --strip-disallowed-xattrs --options runtime --timestamp \
-            --identifier "$FAN_HELPER_ID" --sign "$DEVID" "$target"
+            --identifier "$identifier" --sign "$DEVID" "$target"
     elif legacy_identity_installed; then
-        codesign --force --strip-disallowed-xattrs --identifier "$FAN_HELPER_ID" \
+        codesign --force --strip-disallowed-xattrs --identifier "$identifier" \
             --sign "$LEGACY_IDENTITY" "$target"
     else
-        codesign --force --strip-disallowed-xattrs --identifier "$FAN_HELPER_ID" --sign - "$target"
-    fi
-}
-
-codesign_now_playing_adapter() {
-    local target="$1"
-    if [[ -n "$DEVID" ]]; then
-        codesign_with_timestamp_retry --force --strip-disallowed-xattrs --options runtime --timestamp \
-            --identifier "$NOW_PLAYING_ADAPTER_ID" --sign "$DEVID" "$target"
-    elif legacy_identity_installed; then
-        codesign --force --strip-disallowed-xattrs --identifier "$NOW_PLAYING_ADAPTER_ID" \
-            --sign "$LEGACY_IDENTITY" "$target"
-    else
-        codesign --force --strip-disallowed-xattrs --identifier "$NOW_PLAYING_ADAPTER_ID" --sign - "$target"
+        codesign --force --strip-disallowed-xattrs --identifier "$identifier" --sign - "$target"
     fi
 }
 
@@ -834,8 +822,8 @@ sign_bundle() {
     else
         echo "  signing ad-hoc (no identity installed — run Tools/setup-signing.sh)"
     fi
-    [[ -f "$helper" ]] && codesign_fan_helper "$helper"
-    [[ -f "$adapter" ]] && codesign_now_playing_adapter "$adapter"
+    [[ -f "$helper" ]] && codesign_component "$helper" "$FAN_HELPER_ID"
+    [[ -f "$adapter" ]] && codesign_component "$adapter" "$NOW_PLAYING_ADAPTER_ID"
     codesign_app "$bundle"
 
     # If local filesystem metadata invalidates the first signature, sign once
@@ -843,8 +831,8 @@ sign_bundle() {
     if ! codesign --verify --deep --strict "$bundle" >/dev/null 2>&1; then
         echo "  re-signing after filesystem metadata settled"
         xattr -c -r "$bundle" 2>/dev/null || true
-        [[ -f "$helper" ]] && codesign_fan_helper "$helper"
-        [[ -f "$adapter" ]] && codesign_now_playing_adapter "$adapter"
+        [[ -f "$helper" ]] && codesign_component "$helper" "$FAN_HELPER_ID"
+        [[ -f "$adapter" ]] && codesign_component "$adapter" "$NOW_PLAYING_ADAPTER_ID"
         codesign_app "$bundle"
     fi
     [[ -f "$executable" ]] && codesign --verify --strict "$executable"
