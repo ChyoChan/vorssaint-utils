@@ -10,6 +10,20 @@ struct MetricsTests {
     static func main() {
         let suite = TestSuite()
         let groups: [(String, () -> Void)] = [
+            ("published-update", {
+                let finished = DispatchSemaphore(value: 0)
+                Task { @MainActor in
+                    await ReleaseUpdateChecks.run { suite.expect($0, $1) }
+                    finished.signal()
+                }
+                let deadline = Date().addingTimeInterval(10)
+                var done = false
+                while Date() < deadline {
+                    if finished.wait(timeout: .now()) == .success { done = true; break }
+                    RunLoop.main.run(until: Date().addingTimeInterval(0.01))
+                }
+                suite.expect(done, "published release checks finish within their deadline")
+            }),
             ("developer-update", { DeveloperUpdateTests.run(suite) }),
             ("translation", { TranslationTests.run(suite) }),
             ("harness", {

@@ -731,6 +731,7 @@ struct AboutSettings: View {
             }
 
             if AppInfo.isDeveloperBuild {
+                ReleaseUpdateSection()
                 DeveloperUpdateStatusSection()
                     .settingsFormSectionAnchor(.developerUpdateStatus)
             } else {

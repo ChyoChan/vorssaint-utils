@@ -101,3 +101,12 @@ the popup retains this bounded session cache; the translation settings provide a
 Clear cache button. Quitting, session locking and saved-key changes purge it.
 Failures, cancelled/stale completions and empty results are never cached. Text
 is never written to a cache file or shared with PlainTranslate.
+
+## Published releases
+
+Developer builds now expose Settings → About → Check for updates for published
+releases on ChyoChan/vorssaint-utils, including previews. Checks are manual,
+unauthenticated GitHub HTTPS reads. They send no translation or API key and show
+version, notes and a link; they never install or replace the custom build. An
+empty release feed is reported explicitly, independently of the existing upstream
+commit-comparison status. Official builds retain their existing official updater.

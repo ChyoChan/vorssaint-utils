@@ -357,6 +357,7 @@ if (( TEST )); then
         Sources/Vorssaint/Core/DeveloperBuildStatus.swift
         Sources/Vorssaint/Core/DeveloperUpdateStrings.swift
         Sources/Vorssaint/Services/DeveloperUpdateService.swift
+        Sources/Vorssaint/Services/ReleaseUpdateService.swift
         Sources/Vorssaint/Services/Translation/TranslationSupport.swift
         Sources/Vorssaint/Services/Translation/TranslationSpeechSupport.swift
         Sources/Vorssaint/Services/Translation/TranslationLineBreakCleanup.swift
