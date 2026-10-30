@@ -26,6 +26,7 @@ swiftc -parse-as-library -target "$translation_drag_arch-apple-macos15.0" -sdk "
     Tests/Integration/TranslationScrollChecks.swift \
     Tests/Integration/TranslationLanguageChecks.swift \
     Tests/Integration/TranslationTypingChecks.swift \
+    Tests/Integration/TranslationCacheServiceChecks.swift \
     Sources/Vorssaint/Services/Translation/TranslationService.swift \
     Sources/Vorssaint/Services/Translation/TranslationSupport.swift \
     Sources/Vorssaint/Services/Translation/TranslationSpeechSupport.swift \

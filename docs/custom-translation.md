@@ -90,3 +90,14 @@ Run `zsh Tests/TranslationDragIntegrationTests.sh --scroll-only` to check initia
 The translation suite covers presentation sizing, localized compact/editor labels, timing, repeat suppression, app switching, stale clipboard metadata, private item rejection, limits, whole-selection translation including Unicode and whitespace, failed/cancelled async requests, and stale-result identity. Graphical checks use non-private fixture text to exercise the native Copy action, observed double-copy keys, real Apple translation, Edit/Compact state preservation, editing and retranslating, transient-marked output copying, and closing. Layout checks render the actual view in light/dark mode and at minimum sizes with long text. These integration checks require a logged-in graphical session.
 
 Google unit checks use an injected fake transport and fake key only, covering fixed HTTPS destination, header-only credentials, plain-text NMT, language mapping, one unchanged query per complete selection, UTF-8/JSON byte limits, malformed results, HTTP/network failures, no automatic retries, missing credentials, cancellation and billable codepoint limits. A real authenticated Google translation must be verified after the user enters their own key in the installed app; tests never obtain a user's key through chat or terminal output.
+
+## Session cache
+
+The Apple/Google translator reuses up to 20 successful results in process memory,
+within a 500,000-byte UTF-8 budget. Entries match the exact prepared UTF-8 text,
+source (including automatic detection), target and engine. Cache hits start no
+engine session or Google request, so no Google submission is counted. Closing
+the popup retains this bounded session cache; the translation settings provide a
+Clear cache button. Quitting, session locking and saved-key changes purge it.
+Failures, cancelled/stale completions and empty results are never cached. Text
+is never written to a cache file or shared with PlainTranslate.

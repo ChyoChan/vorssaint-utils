@@ -74,6 +74,8 @@ enum TranslationScrollChecks {
             scroll.reflectScrolledClipView(scroll.contentView)
         }
         func complete(_ output: String) {
+            // Each render intentionally seeds a different engine result for the same text.
+            service.clearTranslationCache()
             // The Google fixture's key loader always returns nil. Complete in this
             // turn before its task runs, so neither HTTP nor real Apple translation starts.
             service.translate()

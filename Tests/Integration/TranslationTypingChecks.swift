@@ -122,6 +122,12 @@ enum TranslationTypingChecks {
                    "synchronizing a changed engine preference does not schedule translation")
         }
 
+        var cacheChecksFinished = false
+        Task { @MainActor in
+            await TranslationCacheServiceChecks.run { expect($0, $1) }
+            cacheChecksFinished = true
+        }
+        wait("cache service checks complete without real providers", until: { cacheChecksFinished })
         expect(GoogleTranslationUsageStore.shared.snapshot() == usage,
                "typing checks never submit Google characters or requests")
         for (key, value) in zip(keys, saved) {

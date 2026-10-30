@@ -11,6 +11,14 @@ struct TranslationStrings {
     private func t(_ en: String, _ zh: String, _ hans: String? = nil) -> String {
         chinese ? (simplified ? (hans ?? zh) : zh) : en
     }
+    var cacheTitle: String { t("Translation cache", "翻譯暫存", "翻译缓存") }
+    var clearCache: String { t("Clear cache", "清除暫存", "清除缓存") }
+    func cacheCount(_ count: Int) -> String { t("\(count) cached results", "已暫存 \(count) 筆結果", "已缓存 \(count) 条结果") }
+    var cacheCaption: String {
+        t("Reuse successful results for the same prepared text, languages and engine. Up to 20 results stay in memory only, until you clear them, lock the session or quit. Google cache hits send no request and add no usage.",
+          "相同文字、語言及引擎會重用成功結果。最多 20 筆，只存於記憶體；清除、鎖定工作階段或退出 App 時移除。命中 Google 暫存不會發送請求或增加用量。",
+          "相同文字、语言及引擎会复用成功结果。最多 20 条，仅存于内存；清除、锁定会话或退出 App 时移除。命中 Google 缓存不会发送请求或增加用量。")
+    }
     var title: String { t("Translation", "翻譯", "翻译") }
     var enable: String { t("Translate on double ⌘C", "連按兩次 ⌘C 翻譯", "连按两次 ⌘C 翻译") }
     var pdfLineBreakCleanup: String { t("PDF line break cleanup", "PDF 換行整理", "PDF 换行整理") }

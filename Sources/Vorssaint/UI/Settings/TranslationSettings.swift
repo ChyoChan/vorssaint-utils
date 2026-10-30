@@ -120,6 +120,16 @@ struct TranslationSettings: View {
                 }
                 Text(text.popupAppearanceCaption).font(.caption).foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
+                Divider()
+                HStack {
+                    Text(text.cacheCount(translation.cachedTranslationCount))
+                    Spacer()
+                    Button(text.clearCache) { translation.clearTranslationCache() }
+                        .disabled(translation.cachedTranslationCount == 0)
+                        .accessibilityIdentifier("clearTranslationCache")
+                }
+                Text(text.cacheCaption).font(.caption).foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
                 if translation.engine == .apple {
                     Text(translation.privacyNotice).font(.caption).foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)

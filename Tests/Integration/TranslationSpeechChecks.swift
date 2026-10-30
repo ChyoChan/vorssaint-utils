@@ -64,6 +64,7 @@ enum TranslationSpeechChecks {
         }
         func pump() { RunLoop.main.run(until: Date().addingTimeInterval(0.05)) }
         func fill() {
+            service.clearTranslationCache()
             service.input = "One whole sentence.\nA second line."
             service.source = "en"
             service.target = "en"
@@ -99,6 +100,7 @@ enum TranslationSpeechChecks {
                "editing stops obsolete speech and clears the old translation")
         fill()
         service.toggleSpeech(.original)
+        service.clearTranslationCache()
         service.translate()
         expect(service.speakingPart == nil && service.busy, "retranslation stops current speech")
         let count = synthesizer.utterances.count

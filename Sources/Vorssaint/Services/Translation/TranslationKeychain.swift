@@ -90,7 +90,9 @@ struct TranslationKeychain {
         let result = await Task.detached { Result { try store.save(key) } }.value
         busy = false
         switch result {
-        case .success: hasKey = true; status = .saved; return true
+        case .success:
+            NotificationCenter.default.post(name: .translationCredentialsDidChange, object: nil)
+            hasKey = true; status = .saved; return true
         case .failure: status = .failed; return false
         }
     }
@@ -102,7 +104,9 @@ struct TranslationKeychain {
         let result = await Task.detached { Result { try store.remove() } }.value
         busy = false
         switch result {
-        case .success: hasKey = false; status = .removed
+        case .success:
+            NotificationCenter.default.post(name: .translationCredentialsDidChange, object: nil)
+            hasKey = false; status = .removed
         case .failure: status = .failed
         }
     }
