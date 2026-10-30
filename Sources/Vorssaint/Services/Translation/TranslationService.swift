@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Vorssaint
+// Copyright (C) 2026 PlainTranslate contributors
 
 import AppKit
 import ApplicationServices
@@ -15,14 +16,14 @@ final class TranslationService: NSObject, ObservableObject, NSWindowDelegate, AV
     @Published var input = ""
     @Published var source = TranslationLanguageDefaults.source
     @Published var target = TranslationLanguageDefaults.target
-    @Published private(set) var recentSourceLanguages = TranslationRecentLanguages.list(
-        UserDefaults.standard.stringArray(forKey: DefaultsKey.translationRecentSourceLanguages))
-    @Published private(set) var recentTargetLanguages = TranslationRecentLanguages.list(
-        UserDefaults.standard.stringArray(forKey: DefaultsKey.translationRecentTargetLanguages))
+    @Published private(set) var recentSourceLanguages = TranslationRecentLanguages.tabs(forSource: true)
+    @Published private(set) var recentTargetLanguages = TranslationRecentLanguages.tabs(forSource: false)
     @Published private(set) var output = ""
     @Published private(set) var message: String?
+    @Published private(set) var googleFailure: GoogleTranslationError?
     @Published private(set) var busy = false
     @Published private(set) var copied = false
+    @Published private(set) var copiedOriginal = false
     @Published private(set) var request: TranslationRequest?
     @Published private(set) var presentation: TranslationPresentation = .editor
     @Published private(set) var speakingPart: TranslationSpeechPart?
@@ -35,7 +36,13 @@ final class TranslationService: NSObject, ObservableObject, NSWindowDelegate, AV
     @Published private(set) var engine = TranslationEngine(
         rawValue: UserDefaults.standard.string(forKey: DefaultsKey.translationEngine) ?? "") ?? .apple
     var privacyNotice: String { engine == .apple ? strings.privacy : strings.googlePrivacy }
+    var offersGoogleKeySetup: Bool {
+        guard let googleFailure else { return false }
+        return [.missingKey, .invalidKey, .denied].contains(googleFailure)
+    }
     private var cloudTask: Task<Void, Never>?
+    private var autoTranslationTask: Task<Void, Never>?
+    private let autoTranslationDelay: () async throws -> Void
     private var speechSynthesizer: AVSpeechSynthesizer?
     private let speechVoices: () -> [AVSpeechSynthesisVoice]
     private var speechUtterance: AVSpeechUtterance?
@@ -60,9 +67,13 @@ final class TranslationService: NSObject, ObservableObject, NSWindowDelegate, AV
     private var strings: TranslationStrings { TranslationStrings(language: L10n.shared.language) }
 
     init(speechSynthesizer: AVSpeechSynthesizer? = nil,
-         speechVoices: @escaping () -> [AVSpeechSynthesisVoice] = AVSpeechSynthesisVoice.speechVoices) {
+         speechVoices: @escaping () -> [AVSpeechSynthesisVoice] = AVSpeechSynthesisVoice.speechVoices,
+         autoTranslationDelay: @escaping () async throws -> Void = {
+             try await Task.sleep(nanoseconds: 600_000_000)
+         }) {
         self.speechSynthesizer = speechSynthesizer
         self.speechVoices = speechVoices
+        self.autoTranslationDelay = autoTranslationDelay
         super.init()
     }
 
@@ -82,10 +93,8 @@ final class TranslationService: NSObject, ObservableObject, NSWindowDelegate, AV
     }
 
     func syncWithPreferences() {
-        let sourceHistory = TranslationRecentLanguages.list(
-            UserDefaults.standard.stringArray(forKey: DefaultsKey.translationRecentSourceLanguages))
-        let targetHistory = TranslationRecentLanguages.list(
-            UserDefaults.standard.stringArray(forKey: DefaultsKey.translationRecentTargetLanguages))
+        let sourceHistory = TranslationRecentLanguages.tabs(forSource: true)
+        let targetHistory = TranslationRecentLanguages.tabs(forSource: false)
         if sourceHistory != recentSourceLanguages { recentSourceLanguages = sourceHistory }
         if targetHistory != recentTargetLanguages { recentTargetLanguages = targetHistory }
         let enabled = UserDefaults.standard.bool(forKey: DefaultsKey.translationDoubleCopyEnabled)
@@ -282,6 +291,8 @@ final class TranslationService: NSObject, ObservableObject, NSWindowDelegate, AV
     }
 
     func close() {
+        cancelAutoTranslation()
+        googleFailure = nil
         stopSpeech()
         removeDismissMonitors()
         cloudTask?.cancel()
@@ -293,11 +304,19 @@ final class TranslationService: NSObject, ObservableObject, NSWindowDelegate, AV
         output = ""
         message = nil
         copied = false
+        copiedOriginal = false
         copyToken = UUID()
         panel?.orderOut(nil)
         // Release the SwiftUI task/session as well as all sensitive text.
         panel?.contentView = nil
         panel = nil
+    }
+
+    func hideForSettings() {
+        cancelAutoTranslation()
+        stopSpeech()
+        removeDismissMonitors()
+        panel?.orderOut(nil)
     }
 
     func windowWillClose(_ notification: Notification) { close() }
@@ -363,6 +382,8 @@ final class TranslationService: NSObject, ObservableObject, NSWindowDelegate, AV
     func useCopiedText(requiringChangeAfter baseline: Int? = nil, requiresFreshCopy: Bool = false,
                        presentation mode: TranslationPresentation? = nil) {
         guard !readInFlight else { return }
+        cancelAutoTranslation()
+        googleFailure = nil
         stopSpeech()
         cloudTask?.cancel()
         cloudTask = nil
@@ -400,6 +421,8 @@ final class TranslationService: NSObject, ObservableObject, NSWindowDelegate, AV
     }
 
     func inputDidChange() {
+        cancelAutoTranslation()
+        googleFailure = nil
         stopSpeech()
         cloudTask?.cancel()
         cloudTask = nil
@@ -409,7 +432,38 @@ final class TranslationService: NSObject, ObservableObject, NSWindowDelegate, AV
         busy = false
         message = nil
         copied = false
+        copiedOriginal = false
         copyToken = UUID()
+    }
+
+    func editInput(_ value: String) {
+        input = value
+        inputDidChange()
+        scheduleAutoTranslation()
+    }
+
+    func scheduleAutoTranslation() {
+        cancelAutoTranslation()
+        guard !input.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
+        let token = generation.current
+        let delay = autoTranslationDelay
+        autoTranslationTask = Task { @MainActor [weak self] in
+            do { try await delay(); try Task.checkCancellation() }
+            catch { return }
+            guard let self, self.generation.accepts(token) else { return }
+            // Wait for Chinese/Japanese input-method composition to be committed.
+            if let editor = NSApp?.keyWindow?.firstResponder as? NSTextView, editor.hasMarkedText() {
+                self.scheduleAutoTranslation()
+                return
+            }
+            self.autoTranslationTask = nil
+            self.translate()
+        }
+    }
+
+    private func cancelAutoTranslation() {
+        autoTranslationTask?.cancel()
+        autoTranslationTask = nil
     }
 
     func setEngine(_ value: TranslationEngine) {
@@ -417,8 +471,8 @@ final class TranslationService: NSObject, ObservableObject, NSWindowDelegate, AV
         inputDidChange()
         engine = value
         UserDefaults.standard.set(value.rawValue, forKey: DefaultsKey.translationEngine)
-        // Changing engines never silently sends existing text to Google.
-        // A fresh Translate click (or double-copy gesture) is required.
+        // Settings changes alone do not submit existing text to Google.
+        // The translation-window engine picker explicitly schedules a fresh request.
     }
 
     func setSource(_ value: String) {
@@ -452,16 +506,16 @@ final class TranslationService: NSObject, ObservableObject, NSWindowDelegate, AV
     }
 
     private func rememberLanguage(_ language: String, isSource: Bool) {
-        let current = isSource ? recentSourceLanguages : recentTargetLanguages
-        let updated = TranslationRecentLanguages.recording(language, in: current)
-        guard updated != current else { return }
-        if isSource { recentSourceLanguages = updated }
-        else { recentTargetLanguages = updated }
-        UserDefaults.standard.set(updated, forKey: isSource
-            ? DefaultsKey.translationRecentSourceLanguages : DefaultsKey.translationRecentTargetLanguages)
+        TranslationRecentLanguages.record(language, forSource: isSource)
+        let visible = TranslationRecentLanguages.tabs(forSource: isSource)
+        if isSource {
+            if visible != recentSourceLanguages { recentSourceLanguages = visible }
+        } else if visible != recentTargetLanguages { recentTargetLanguages = visible }
     }
 
     func translate() {
+        cancelAutoTranslation()
+        googleFailure = nil
         stopSpeech()
         do { _ = try TranslationTextPlan.validate(input) }
         catch { message = inputMessage(error); return }
@@ -472,6 +526,7 @@ final class TranslationService: NSObject, ObservableObject, NSWindowDelegate, AV
         generation.advance()
         output = ""
         copied = false
+        copiedOriginal = false
         message = nil
         busy = true
         copyToken = UUID()
@@ -498,6 +553,8 @@ final class TranslationService: NSObject, ObservableObject, NSWindowDelegate, AV
     }
 
     func cancel() {
+        cancelAutoTranslation()
+        googleFailure = nil
         stopSpeech()
         cloudTask?.cancel()
         cloudTask = nil
@@ -509,6 +566,7 @@ final class TranslationService: NSObject, ObservableObject, NSWindowDelegate, AV
 
     func finish(_ id: UUID, result: Result<String, Error>) {
         guard request?.id == id else { return }
+        googleFailure = nil
         cloudTask = nil
         busy = false
         switch result {
@@ -517,7 +575,10 @@ final class TranslationService: NSObject, ObservableObject, NSWindowDelegate, AV
             if error is CancellationError { message = nil }
             else if error is TranslationUnsupportedPair { message = strings.unsupported }
             else if error is TranslationUnknownSource { message = strings.unknownSource }
-            else if let error = error as? GoogleTranslationError { message = strings.googleError(error) }
+            else if let error = error as? GoogleTranslationError {
+                googleFailure = error
+                message = strings.googleError(error)
+            }
             else if error is TranslationKeychain.Failure { message = strings.keychainFailed }
             else if error is TranslationInputError { message = inputMessage(error) }
             else { message = strings.failed }
@@ -615,9 +676,13 @@ final class TranslationService: NSObject, ObservableObject, NSWindowDelegate, AV
         }
     }
 
-    func copyOutput() {
-        guard !output.isEmpty else { return }
-        let text = output
+    func copyOriginal() { copy(original: true) }
+
+    func copyOutput() { copy(original: false) }
+
+    private func copy(original: Bool) {
+        let text = original ? input : output
+        guard !text.isEmpty, !busy else { return }
         let token = UUID()
         copyToken = token
         // Mark this explicit copy transient so clipboard history doesn't turn
@@ -630,7 +695,8 @@ final class TranslationService: NSObject, ObservableObject, NSWindowDelegate, AV
             return NSPasteboard.general.writeObjects([item])
         }, then: { [weak self] result in
             guard let self, self.copyToken == token else { return }
-            self.copied = result == true
+            self.copied = result == true && !original
+            self.copiedOriginal = result == true && original
             if result != true { self.message = self.strings.failed }
         })
     }

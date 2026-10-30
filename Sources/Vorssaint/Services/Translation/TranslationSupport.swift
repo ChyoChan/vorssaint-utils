@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Vorssaint
+// Copyright (C) 2026 PlainTranslate contributors
 
 import Foundation
 
@@ -16,10 +17,11 @@ enum TranslationLanguageDefaults {
 enum TranslationRecentLanguages {
     static let fallback = ["en", "ja", "zh-Hant"]
 
-    static func list(_ saved: [String]?) -> [String] {
+    static func list(_ saved: [String]?, forSource: Bool = false) -> [String] {
         var result: [String] = []
         for language in (saved ?? []) + fallback {
-            if TranslationLanguageDefaults.languages.contains(language), !result.contains(language) {
+            if (TranslationLanguageDefaults.languages.contains(language) || (forSource && language == "auto")),
+               !result.contains(language) {
                 result.append(language)
             }
             if result.count == 3 { break }
@@ -27,9 +29,43 @@ enum TranslationRecentLanguages {
         return result
     }
 
-    static func recording(_ language: String, in saved: [String]?) -> [String] {
-        guard TranslationLanguageDefaults.languages.contains(language) else { return list(saved) }
-        return list([language] + (saved ?? []))
+    static func recording(_ language: String, in saved: [String]?, forSource: Bool = false) -> [String] {
+        guard TranslationLanguageDefaults.languages.contains(language) || (forSource && language == "auto") else {
+            return list(saved, forSource: forSource)
+        }
+        return list([language] + (saved ?? []), forSource: forSource)
+    }
+
+    static func load(forSource: Bool, from defaults: UserDefaults = .standard) -> [String] {
+        let initial = forSource ? fallback : TranslationLanguageDefaults.languages
+        return list(defaults.stringArray(forKey: key(forSource)) ?? initial, forSource: forSource)
+    }
+
+    static func tabs(forSource: Bool, from defaults: UserDefaults = .standard) -> [String] {
+        list(defaults.stringArray(forKey: tabKey(forSource)) ?? load(forSource: forSource, from: defaults),
+             forSource: forSource)
+    }
+
+    static func record(_ language: String, forSource: Bool, in defaults: UserDefaults = .standard) {
+        guard TranslationLanguageDefaults.languages.contains(language) || (forSource && language == "auto") else { return }
+        let previousTabs = tabs(forSource: forSource, from: defaults)
+        let recent = recording(language, in: load(forSource: forSource, from: defaults), forSource: forSource)
+        // Keep visible buttons stationary while recording the real usage order.
+        let visible = previousTabs.contains(language) ? previousTabs : recent
+        if defaults.stringArray(forKey: tabKey(forSource)) != visible {
+            defaults.set(visible, forKey: tabKey(forSource))
+        }
+        if defaults.stringArray(forKey: key(forSource)) != recent {
+            defaults.set(recent, forKey: key(forSource))
+        }
+    }
+
+    private static func key(_ forSource: Bool) -> String {
+        forSource ? DefaultsKey.translationRecentSourceLanguages : DefaultsKey.translationRecentTargetLanguages
+    }
+
+    private static func tabKey(_ forSource: Bool) -> String {
+        forSource ? DefaultsKey.translationSourceTabs : DefaultsKey.translationTargetTabs
     }
 }
 

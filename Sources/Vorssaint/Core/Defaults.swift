@@ -12,6 +12,8 @@ enum DefaultsKey {
     static let translationEngine = "translationEngine"
     static let translationRecentSourceLanguages = "translationRecentSourceLanguages"
     static let translationRecentTargetLanguages = "translationRecentTargetLanguages"
+    static let translationSourceTabs = "translationSourceTabs"
+    static let translationTargetTabs = "translationTargetTabs"
     static let translationGoogleUsage = "translationGoogleUsage"
     static let translationGoogleUsageReminderEnabled = "translationGoogleUsageReminderEnabled"
     static let translationGoogleUsageReminderMonth = "translationGoogleUsageReminderMonth"
@@ -1222,7 +1224,7 @@ enum Defaults {
         DefaultsKey.translationDoubleCopyEnabled: true,
         DefaultsKey.translationEngine: TranslationEngine.apple.rawValue,
         DefaultsKey.translationRecentSourceLanguages: TranslationRecentLanguages.fallback,
-        DefaultsKey.translationRecentTargetLanguages: TranslationRecentLanguages.fallback,
+        DefaultsKey.translationRecentTargetLanguages: TranslationLanguageDefaults.languages,
         DefaultsKey.translationGoogleUsageReminderEnabled: true,
         DefaultsKey.translationGoogleUsageReminderMonth: "",
         DefaultsKey.translationPopupWidth: TranslationCompactLayout.defaultWidth,

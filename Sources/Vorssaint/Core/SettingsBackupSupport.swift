@@ -105,6 +105,8 @@ enum SettingsBackupSupport {
         DefaultsKey.translationGoogleUsageReminderMonth,
         DefaultsKey.translationRecentSourceLanguages,
         DefaultsKey.translationRecentTargetLanguages,
+        DefaultsKey.translationSourceTabs,
+        DefaultsKey.translationTargetTabs,
         DefaultsKey.displaysSwitchedOff,
         DefaultsKey.displaysSwitchedOffFingerprints,
         // Codex homes are folders on this Mac whose sign-in the cards use,

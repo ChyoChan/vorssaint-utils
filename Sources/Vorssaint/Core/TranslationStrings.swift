@@ -45,18 +45,14 @@ struct TranslationStrings {
     var auto: String { t("Detect language", "自動辨識", "自动识别") }
     var chooseLanguage: String { t("Choose language", "選擇語言", "选择语言") }
     func languageName(_ identifier: String) -> String {
-        switch identifier {
-        case "en": return t("English", "英文")
-        case "ja": return t("Japanese", "日文")
-        case "zh-Hant": return t("Chinese (Traditional)", "中文（繁體）", "中文（繁体）")
-        case "auto": return auto
-        default: return Locale(identifier: language.rawValue).localizedString(forIdentifier: identifier) ?? identifier
-        }
+        identifier == "auto" ? auto :
+            (Locale(identifier: language.rawValue).localizedString(forIdentifier: identifier) ?? identifier)
     }
     var translate: String { t("Translate", "翻譯", "翻译") }
+    var retry: String { t("Retry", "重試", "重试") }
     var copy: String { t("Copy translation", "複製譯文", "复制译文") }
+    var copyOriginal: String { t("Copy original", "複製原文", "复制原文") }
     var copied: String { t("Copied", "已複製", "已复制") }
-    var paste: String { t("Use copied text", "使用已複製文字", "使用已复制文字") }
     var speakOriginal: String { t("Read original", "朗讀原文", "朗读原文") }
     var speakTranslation: String { t("Read translation", "朗讀譯文", "朗读译文") }
     var stopSpeech: String { t("Stop reading", "停止朗讀", "停止朗读") }
@@ -108,10 +104,10 @@ struct TranslationStrings {
     }
     var cancel: String { t("Cancel", "取消") }
     var close: String { t("Close", "關閉", "关闭") }
-    var edit: String { t("Edit", "編輯", "编辑") }
+    var expand: String { t("Expand to edit", "展開編輯", "展开编辑") }
+    var settings: String { t("Settings", "設定", "设置") }
     var compact: String { t("Compact view", "精簡檢視", "精简视图") }
     var swap: String { t("Swap languages", "交換語言", "交换语言") }
-    var inputPlaceholder: String { t("Type or paste text to translate", "輸入或貼上要翻譯的文字", "输入或粘贴要翻译的文字") }
     var localEngine: String { t("Apple on-device translation", "Apple 本機翻譯", "Apple 本地翻译") }
     var engine: String { t("Translation engine", "翻譯引擎", "翻译引擎") }
     var googleEngine: String { "Google Cloud Translation" }
@@ -137,9 +133,9 @@ struct TranslationStrings {
           "只记录此功能加入后、这个 App 提交的原文字符，包含空格及换行。发送后失败或取消仍计入估算，按香港时间每月重新计算；实际用量及费用以 Google Cloud 为准。")
     }
     var googlePrivacy: String {
-        t("Google sends the original text to Google Cloud over the internet and may incur usage charges. No translation history is saved by this app.",
-          "選用 Google 時，原文會經網絡傳送到 Google Cloud，並可能產生用量費用。此 App 不保存翻譯歷史。",
-          "选择 Google 时，原文会通过网络发送到 Google Cloud，并可能产生用量费用。此 App 不保存翻译历史。")
+        t("With Google selected, pausing typing automatically sends the original text to Google Cloud and may incur usage charges. No translation history is saved by this app.",
+          "選用 Google 時，停止輸入後會自動將原文經網絡傳送到 Google Cloud，並可能產生用量費用。此 App 不保存翻譯歷史。",
+          "选择 Google 时，停止输入后会自动将原文通过网络发送到 Google Cloud，并可能产生用量费用。此 App 不保存翻译历史。")
     }
     var apiKey: String { "Google API Key" }
     var keyPlaceholder: String { t("Paste your API key", "貼上你的 API Key", "粘贴你的 API Key") }
@@ -148,6 +144,8 @@ struct TranslationStrings {
     var keySaved: String { t("Key saved in macOS Keychain. It will be verified on your first translation.", "金鑰已存入 macOS 鑰匙圈；有效性會在首次翻譯時驗證。", "密钥已存入 macOS 钥匙串；有效性会在首次翻译时验证。") }
     var keyPresent: String { t("A key is stored in macOS Keychain.", "macOS 鑰匙圈已有儲存的金鑰。", "macOS 钥匙串已有保存的密钥。") }
     var keyMissing: String { t("Save a Google API key in Settings → General → Translation before translating with Google.", "使用 Google 前，請先到「設定 → 通用 → 翻譯」儲存 API Key。", "使用 Google 前，请先到“设置 → 通用 → 翻译”保存 API Key。") }
+    var configureGoogleKey: String { t("Set up Google API key", "設定 Google 金鑰", "设置 Google 密钥") }
+    var translationUnavailable: String { t("Unable to translate", "無法翻譯", "无法翻译") }
     var keyRemoved: String { t("Key removed from macOS Keychain.", "已從 macOS 鑰匙圈移除金鑰。", "已从 macOS 钥匙串移除密钥。") }
     var keyInvalid: String { t("Check the API key. It must not contain spaces or other non-key characters.", "請檢查 API Key，不應包含空格或其他非金鑰字元。", "请检查 API Key，不应包含空格或其他非密钥字符。") }
     var keychainFailed: String { t("Could not access macOS Keychain. Unlock it or allow access, then try again.", "無法存取 macOS 鑰匙圈，請解鎖或允許存取後重試。", "无法访问 macOS 钥匙串，请解锁或允许访问后重试。") }
@@ -189,7 +187,6 @@ struct TranslationStrings {
     var failed: String { t("Translation failed. Check the selected languages and try again. Language downloads may need a network connection.", "翻譯未完成，請檢查所選語言後重試。下載語言包可能需要網絡連線。", "翻译未完成，请检查所选语言后重试。下载语言包可能需要联网。") }
     var osRequired: String { t("Apple Translation requires macOS 15 or later.", "Apple 翻譯需要 macOS 15 或以上。", "Apple 翻译需要 macOS 15 或以上。") }
     var permission: String { t("Allow Accessibility to detect double ⌘C in other apps. You can still paste text here without it.", "請允許輔助使用，以偵測其他 App 的兩次 ⌘C；未授權時仍可在此貼上文字翻譯。", "请允许辅助功能，以检测其他 App 的两次 ⌘C；未授权时仍可在此粘贴文字翻译。") }
-    var waiting: String { t("Translation appears here.", "譯文會顯示於此。", "译文会显示于此。") }
     var from: String { t("Source language", "原文語言", "原文语言") }
     var to: String { t("Target language", "目標語言", "目标语言") }
 }

@@ -49,6 +49,7 @@ enum TranslationTests {
                      TranslationRecentLanguages.recording("auto", in: recent) == recent &&
                      TranslationRecentLanguages.recording("fr", in: recent) == recent,
                      "recent language order reflects usage while unsupported selections cannot enter history")
+        checkStableLanguageTabs(suite)
         suite.expect(TranslationLanguageDefaults.languages.contains(TranslationLanguageDefaults.source) &&
                      TranslationLanguageDefaults.languages.contains(TranslationLanguageDefaults.target),
                      "default language selections remain available after menu simplification")
@@ -133,7 +134,8 @@ enum TranslationTests {
             let strings = TranslationStrings(language: language)
             suite.expect(!strings.title.isEmpty && !strings.privacy.isEmpty && !strings.failed.isEmpty,
                          "translation has fallback copy for every app language")
-            suite.expect(!strings.edit.isEmpty && !strings.compact.isEmpty && !strings.inputPlaceholder.isEmpty,
+            suite.expect(!strings.expand.isEmpty && !strings.compact.isEmpty &&
+                         !strings.copyOriginal.isEmpty && !strings.configureGoogleKey.isEmpty,
                          "compact/editor controls have localized labels")
         }
         suite.expect(TranslationStrings(language: .zhHK).title == "翻譯", "Hong Kong uses Traditional Chinese")
@@ -175,6 +177,43 @@ enum TranslationTests {
             done.signal()
         }
         suite.expect(done.wait(timeout: .now() + 10) == .success, "async pipeline fixtures finish within a bounded wait")
+    }
+
+    private static func checkStableLanguageTabs(_ suite: TestSuite) {
+        let domain = "com.vorssaint.tests.translation-tabs.\(UUID().uuidString)"
+        guard let defaults = UserDefaults(suiteName: domain) else {
+            suite.expect(false, "isolated language preference domain is available"); return
+        }
+        defer { defaults.removePersistentDomain(forName: domain) }
+        let sources = TranslationRecentLanguages.tabs(forSource: true, from: defaults)
+        let targets = TranslationRecentLanguages.tabs(forSource: false, from: defaults)
+        TranslationRecentLanguages.record("ja", forSource: true, in: defaults)
+        suite.expect(TranslationRecentLanguages.tabs(forSource: true, from: defaults) == sources &&
+                     TranslationRecentLanguages.load(forSource: true, from: defaults).first == "ja",
+                     "selecting a visible source tab records usage without moving the tab")
+        suite.expect(TranslationRecentLanguages.tabs(forSource: false, from: defaults) == targets,
+                     "source usage does not reorder target language tabs")
+        TranslationRecentLanguages.record("ja", forSource: false, in: defaults)
+        suite.expect(TranslationRecentLanguages.tabs(forSource: false, from: defaults) == targets &&
+                     TranslationRecentLanguages.load(forSource: false, from: defaults).first == "ja",
+                     "target usage is recorded independently without moving visible buttons")
+        guard let reloaded = UserDefaults(suiteName: domain) else {
+            suite.expect(false, "language preference domain can be reopened"); return
+        }
+        suite.expect(TranslationRecentLanguages.tabs(forSource: true, from: reloaded) == sources &&
+                     TranslationRecentLanguages.tabs(forSource: false, from: reloaded) == targets,
+                     "stable language positions survive reloading their preference domain")
+        TranslationRecentLanguages.record("auto", forSource: true, in: defaults)
+        let automatic = TranslationRecentLanguages.tabs(forSource: true, from: defaults)
+        suite.expect(automatic.first == "auto" && automatic.count == 3 && Set(automatic).count == 3,
+                     "an unseen source choice refreshes the three tabs without duplicates")
+        suite.expect(TranslationRecentLanguages.load(forSource: true, from: defaults).first == "auto",
+                     "source automatic detection retains its actual most-recent-use position")
+        TranslationRecentLanguages.record("auto", forSource: false, in: defaults)
+        TranslationRecentLanguages.record("fr", forSource: false, in: defaults)
+        suite.expect(TranslationRecentLanguages.tabs(forSource: false, from: defaults) == targets &&
+                     TranslationRecentLanguages.load(forSource: false, from: defaults).first == "ja",
+                     "automatic or unavailable target choices cannot alter history or visible tabs")
     }
 
     private struct TestFailure: Error {}

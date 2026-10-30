@@ -22,6 +22,8 @@ enum DefaultsKey {
     static let translationEngine = "fixtureEngine"
     static let translationRecentSourceLanguages = "fixtureRecentSourceLanguages"
     static let translationRecentTargetLanguages = "fixtureRecentTargetLanguages"
+    static let translationSourceTabs = "fixtureSourceTabs"
+    static let translationTargetTabs = "fixtureTargetTabs"
     static let translationGoogleUsage = "fixtureGoogleUsage"
     static let translationGoogleUsageReminderEnabled = "fixtureGoogleUsageReminderEnabled"
     static let translationGoogleUsageReminderMonth = "fixtureGoogleUsageReminderMonth"
@@ -39,6 +41,44 @@ struct TranslationKeychain {
 }
 enum ShortcutCapture { static let isCapturing = false }
 enum AssistiveKeyboard { static func ownsCocoaPoint(_ point: NSPoint) -> Bool { false } }
+// Routing is captured locally; the fixture never opens the app's Settings window.
+enum SettingsPage { case general }
+enum SettingsSectionAnchor { case translation }
+struct FeatureSettingsDestination {
+    let page: SettingsPage
+    let sectionAnchor: SettingsSectionAnchor?
+    init(_ page: SettingsPage, sectionAnchor: SettingsSectionAnchor? = nil) {
+        self.page = page
+        self.sectionAnchor = sectionAnchor
+    }
+}
+final class SettingsRouter {
+    static let shared = SettingsRouter()
+    private(set) var destination: FeatureSettingsDestination?
+    func request(_ destination: FeatureSettingsDestination) { self.destination = destination }
+}
+final class FixtureAppDelegate {
+    static let shared = FixtureAppDelegate()
+    private(set) var settingsRequests = 0
+    func openSettingsWindow() { settingsRequests += 1 }
+}
+func appDelegate() -> FixtureAppDelegate? { .shared }
+struct BrandMark: View {
+    let width: CGFloat
+    var tint: Color = .white
+    private static let mark = NSImage(contentsOfFile: "Resources/Brand/logo.png")
+    var body: some View {
+        Group {
+            if let mark = Self.mark {
+                Image(nsImage: mark).renderingMode(.template).resizable().scaledToFit()
+            } else {
+                Image(systemName: "circle.fill").resizable().scaledToFit()
+            }
+        }
+        .foregroundStyle(tint)
+        .frame(width: width)
+    }
+}
 enum QuickToolHUD {
     static var messages: [String] = []
     static var durations: [TimeInterval] = []
@@ -227,6 +267,10 @@ private final class NotifyingUsageDefaults: UserDefaults, @unchecked Sendable {
 
     static func main() {
         setbuf(stdout, nil)
+        if CommandLine.arguments.contains("--typing-only") {
+            TranslationTypingChecks.run()
+            return
+        }
         if CommandLine.arguments.contains("--language-only") {
             TranslationLanguageChecks.run()
             return
@@ -266,7 +310,8 @@ private final class NotifyingUsageDefaults: UserDefaults, @unchecked Sendable {
         let originalPointer = NSEvent.mouseLocation
         let preferences = UserDefaults.standard
         let storedEngine = preferences.object(forKey: DefaultsKey.translationEngine)
-        let recentKeys = [DefaultsKey.translationRecentSourceLanguages, DefaultsKey.translationRecentTargetLanguages]
+        let recentKeys = [DefaultsKey.translationRecentSourceLanguages, DefaultsKey.translationRecentTargetLanguages,
+                          DefaultsKey.translationSourceTabs, DefaultsKey.translationTargetTabs]
         let storedRecents = recentKeys.map { preferences.object(forKey: $0) }
         preferences.register(defaults: [DefaultsKey.translationPopupWidth: TranslationCompactLayout.defaultWidth,
                                        DefaultsKey.translationPopupFontSize: TranslationCompactLayout.defaultFontSize,
@@ -301,10 +346,16 @@ private final class NotifyingUsageDefaults: UserDefaults, @unchecked Sendable {
         func panel() -> NSWindow? {
             app.windows.first { $0.title == "翻譯" && $0.contentView != nil && (engineChecksOnly || $0.isVisible) }
         }
-        func open(_ mode: TranslationPresentation = .compact) {
-            service.input = "Non-private translation drag fixture"
+        func open(_ mode: TranslationPresentation = .compact, input: String = "Non-private translation drag fixture") {
+            service.input = input
             service.open(mode)
-            if engineChecksOnly { panel()?.orderOut(nil) }
+            if engineChecksOnly, let fixture = panel() {
+                // Desktop clicks must not dismiss this offscreen control fixture.
+                service.hideForSettings()
+                fixture.alphaValue = 0
+                fixture.setFrameOrigin(NSPoint(x: -10000, y: -10000))
+                fixture.orderFront(nil)
+            }
             else { panel()?.setFrameOrigin(CGPoint(x: visible.midX - 240, y: visible.midY - 100)) }
             pump(0.1)
         }
@@ -318,38 +369,76 @@ private final class NotifyingUsageDefaults: UserDefaults, @unchecked Sendable {
             pump()
         }
 
-        func engineControl(in view: NSView?) -> NSPopUpButton? {
-            guard let view else { return nil }
-            if let control = view as? NSPopUpButton,
-               control.itemTitles.contains("Apple"), control.itemTitles.contains("Google") { return control }
-            for child in view.subviews {
-                if let control = engineControl(in: child) { return control }
+        func selectEngine(_ engine: TranslationEngine, mode: TranslationPresentation) {
+            guard let window = panel(), let root = window.contentView else {
+                expect(false, "\(mode) contains the translation panel"); return
             }
-            return nil
+            // Both headers use the same 190-point segmented control beside the brand.
+            let startX: CGFloat = mode == .compact ? 40 : 46
+            let topY: CGFloat = mode == .compact ? 29 : 27
+            let point = NSPoint(x: startX + (engine == .apple ? 47.5 : 142.5),
+                                y: root.isFlipped ? topY : root.bounds.maxY - topY)
+            let location = root.convert(point, to: nil)
+            let timestamp = ProcessInfo.processInfo.systemUptime
+            guard let down = NSEvent.mouseEvent(with: .leftMouseDown, location: location, modifierFlags: [],
+                timestamp: timestamp, windowNumber: window.windowNumber, context: nil,
+                eventNumber: 1, clickCount: 1, pressure: 1),
+                  let up = NSEvent.mouseEvent(with: .leftMouseUp, location: location, modifierFlags: [],
+                timestamp: timestamp + 0.01, windowNumber: window.windowNumber, context: nil,
+                eventNumber: 2, clickCount: 1, pressure: 0) else {
+                expect(false, "\(mode) constructs local engine clicks"); return
+            }
+            app.postEvent(up, atStart: false)
+            window.sendEvent(down)
+            window.sendEvent(up)
+            pump()
         }
         service.setEngine(.apple)
         for mode in [TranslationPresentation.compact, .editor] {
-            open(mode)
-            if let control = engineControl(in: panel()?.contentView) {
-                control.menu?.performActionForItem(at: control.indexOfItem(withTitle: "Google"))
-                pump()
-                expect(engineControl(in: panel()?.contentView)?.selectedItem?.title == "Google" &&
-                       preferences.string(forKey: DefaultsKey.translationEngine) == "google",
-                       "\(mode) engine picker reflects the saved engine")
-                expect(panel() != nil && !service.input.isEmpty && service.request == nil && !service.busy,
-                       "\(mode) switching engines preserves the original and waits for explicit translation")
-                if let updated = engineControl(in: panel()?.contentView) {
-                    updated.menu?.performActionForItem(at: updated.indexOfItem(withTitle: "Apple"))
-                }
-                pump()
-                expect(engineControl(in: panel()?.contentView)?.selectedItem?.title == "Apple" && service.request == nil,
-                       "\(mode) engine picker switches back without starting translation")
-            } else { expect(false, "\(mode) contains a native engine picker") }
+            open(mode, input: "")
+            selectEngine(.google, mode: mode)
+            expect(service.engine == .google && preferences.string(forKey: DefaultsKey.translationEngine) == "google",
+                   "\(mode) segmented engine control saves Google")
+            expect(service.input.isEmpty && service.request == nil && !service.busy,
+                   "\(mode) selecting an engine with empty text never starts translation")
+            selectEngine(.apple, mode: mode)
+            expect(service.engine == .apple && service.request == nil,
+                   "\(mode) segmented engine control switches back to Apple")
+            service.input = "Non-private original retained while choosing an engine in Settings"
+            service.setEngine(.google)
+            expect(!service.input.isEmpty && service.request == nil && !service.busy,
+                   "\(mode) settings engine changes preserve text and do not submit it")
+            service.setEngine(.apple)
             service.close()
             pump()
             expect(panel() == nil, "\(mode) picker interactions do not keep a closed popup visible")
         }
         if engineChecksOnly {
+            let original = "Non-private retry fixture"
+            service.input = original
+            service.translate()
+            if let request = service.request {
+                service.finish(request.id, result: .failure(NSError(domain: "TranslationRetryFixture", code: 1)))
+            }
+            open(.editor, input: original)
+            if let window = panel(), let event = NSEvent.keyEvent(with: .keyDown, location: .zero,
+                modifierFlags: .command, timestamp: ProcessInfo.processInfo.systemUptime,
+                windowNumber: window.windowNumber, context: nil, characters: "\r",
+                charactersIgnoringModifiers: "\r", isARepeat: false, keyCode: 36) {
+                let handled = window.performKeyEquivalent(with: event)
+                expect(handled && service.request != nil && service.busy,
+                       "editor errors offer Command-Return to retry without changing the input")
+                if let request = service.request {
+                    // Complete synchronously before an Apple engine view can mount.
+                    service.finish(request.id, result: .success("Retried fixture result"))
+                }
+                expect(service.input == original && service.output == "Retried fixture result",
+                       "retry preserves the original and accepts a fresh completion")
+            } else {
+                expect(false, "editor retry fixture has a local key equivalent")
+            }
+            service.close()
+            pump()
             print("Translation engine picker failures: \(failures)")
             if failures != 0 { exit(1) }
             return
