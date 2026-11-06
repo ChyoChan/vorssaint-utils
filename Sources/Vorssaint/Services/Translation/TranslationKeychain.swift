@@ -8,12 +8,17 @@ import LocalAuthentication
 
 struct TranslationKeychain {
     let service: String
-    init(service: String = (Bundle.main.bundleIdentifier ?? "com.vorssaint.utils") + ".translation.google") {
+    private let keychain: SecKeychain?
+    init(service: String = (Bundle.main.bundleIdentifier ?? "com.vorssaint.utils") + ".translation.google",
+         keychain: SecKeychain? = nil) {
         self.service = service
+        self.keychain = keychain
     }
     private var query: [String: Any] {
-        [kSecClass as String: kSecClassGenericPassword, kSecAttrService as String: service,
-         kSecAttrAccount as String: "api-key", kSecAttrSynchronizable as String: false]
+        var query: [String: Any] = [kSecClass as String: kSecClassGenericPassword, kSecAttrService as String: service,
+                                  kSecAttrAccount as String: "api-key", kSecAttrSynchronizable as String: false]
+        if let keychain { query[kSecMatchSearchList as String] = [keychain] }
+        return query
     }
 
     func contains() throws -> Bool {
@@ -44,13 +49,15 @@ struct TranslationKeychain {
     func save(_ value: String) throws {
         let key = try TranslationAPIKey.normalized(value)
         let data = Data(key.utf8)
-        let updated = SecItemUpdate(query as CFDictionary, [kSecValueData as String: data] as CFDictionary)
-        if updated == errSecSuccess { return }
-        guard updated == errSecItemNotFound else { throw Failure() }
+        // Updating an existing item can retain another app’s read access.
         var item = query
+        item.removeValue(forKey: kSecMatchSearchList as String)
+        if let keychain { item[kSecUseKeychain as String] = keychain }
         item[kSecValueData as String] = data
         item[kSecAttrAccessible as String] = kSecAttrAccessibleWhenUnlockedThisDeviceOnly
-        guard SecItemAdd(item as CFDictionary, nil) == errSecSuccess else { throw Failure() }
+        let status = SecItemAdd(item as CFDictionary, nil)
+        if status == errSecDuplicateItem { throw ExistingItem() }
+        guard status == errSecSuccess else { throw Failure() }
     }
 
     func remove() throws {
@@ -58,6 +65,7 @@ struct TranslationKeychain {
         guard status == errSecSuccess || status == errSecItemNotFound else { throw Failure() }
     }
 
+    struct ExistingItem: Error {}
     struct Failure: Error {}
 }
 
@@ -67,7 +75,7 @@ struct TranslationKeychain {
     @Published private(set) var hasKey = false
     @Published private(set) var busy = false
     @Published private(set) var status: Status = .none
-    enum Status { case none, saved, removed, failed, invalid }
+    enum Status { case none, saved, removed, failed, invalid, exists }
     private let store = TranslationKeychain()
 
     func refresh() async {
@@ -93,6 +101,8 @@ struct TranslationKeychain {
         case .success:
             NotificationCenter.default.post(name: .translationCredentialsDidChange, object: nil)
             hasKey = true; status = .saved; return true
+        case .failure(is TranslationKeychain.ExistingItem):
+            hasKey = true; status = .exists; return false
         case .failure: status = .failed; return false
         }
     }

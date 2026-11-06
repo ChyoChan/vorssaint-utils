@@ -22,6 +22,8 @@ final class Permissions: ObservableObject {
 }
 enum DefaultsKey {
     static let translationDoubleCopyEnabled = "fixtureDoubleCopyEnabled"
+    static let translationCustomShortcutEnabled = "fixtureCustomShortcutEnabled"
+    static let translationShortcut = "fixtureTranslationShortcut"
     static let translationEngine = "fixtureEngine"
     static let translationRecentSourceLanguages = "fixtureRecentSourceLanguages"
     static let translationRecentTargetLanguages = "fixtureRecentTargetLanguages"
@@ -270,6 +272,10 @@ private final class NotifyingUsageDefaults: UserDefaults, @unchecked Sendable {
 
     static func main() {
         setbuf(stdout, nil)
+        if CommandLine.arguments.contains("--feature-parity") {
+            TranslationFeatureParityChecks.run()
+            return
+        }
         if CommandLine.arguments.contains("--typing-only") {
             TranslationTypingChecks.run()
             return

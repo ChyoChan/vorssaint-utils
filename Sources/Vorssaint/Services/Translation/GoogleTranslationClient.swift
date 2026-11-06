@@ -107,15 +107,7 @@ final class GoogleTranslationClient {
                 throw GoogleTranslationError.network
             }
             try Task.checkCancellation()
-            switch response.statusCode {
-            case 200: break
-            case 400: throw GoogleTranslationError.invalidRequest
-            case 401: throw GoogleTranslationError.invalidKey
-            case 403: throw GoogleTranslationError.denied
-            case 429: throw GoogleTranslationError.quota
-            case 500...599: throw GoogleTranslationError.unavailable
-            default: throw GoogleTranslationError.invalidResponse
-            }
+            guard response.statusCode == 200 else { throw Self.failure(for: response.statusCode, data: data) }
             guard data.count <= 2_000_000,
                   let decoded = try? JSONDecoder().decode(Response.self, from: data),
                   decoded.data.translations.count == 1 else {
@@ -126,6 +118,27 @@ final class GoogleTranslationClient {
         let result = try await translateWholeSelection()
         try Task.checkCancellation()
         return result
+    }
+
+    private static func failure(for status: Int, data: Data) -> GoogleTranslationError {
+        if [400, 403].contains(status), data.count <= 2_000_000,
+           let payload = try? JSONDecoder().decode(ErrorResponse.self, from: data).error {
+            let reasons = Set((payload.errors ?? []).compactMap(\.reason) +
+                (payload.details ?? []).filter { $0.type == "type.googleapis.com/google.rpc.ErrorInfo" }.compactMap(\.reason))
+            let quotaReasons: Set<String> = ["dailyLimitExceeded", "userRateLimitExceeded", "rateLimitExceeded",
+                                             "quotaExceeded", "RATE_LIMIT_EXCEEDED", "QUOTA_EXCEEDED"]
+            if !reasons.isDisjoint(with: quotaReasons) || payload.status == "RESOURCE_EXHAUSTED" ||
+                ["Daily Limit Exceeded", "User Rate Limit Exceeded"].contains(payload.message ?? "") { return .quota }
+            if !reasons.isDisjoint(with: ["keyInvalid", "API_KEY_INVALID"]) { return .invalidKey }
+        }
+        switch status {
+        case 400: return .invalidRequest
+        case 401: return .invalidKey
+        case 403: return .denied
+        case 429: return .quota
+        case 500...599: return .unavailable
+        default: return .invalidResponse
+        }
     }
 
     /// Decode once, without rendering HTML or following external resources.
@@ -152,6 +165,21 @@ final class GoogleTranslationClient {
             result.append(value[cursor]); cursor = value.index(after: cursor)
         }
         return result
+    }
+
+    private struct ErrorResponse: Decodable {
+        let error: Payload
+        struct Payload: Decodable {
+            let message: String?
+            let status: String?
+            let errors: [Reason]?
+            let details: [Reason]?
+        }
+        struct Reason: Decodable {
+            let reason: String?
+            let type: String?
+            enum CodingKeys: String, CodingKey { case reason; case type = "@type" }
+        }
     }
 
     private struct Response: Decodable {

@@ -8,6 +8,7 @@ import AVFoundation
 import Carbon.HIToolbox
 import Combine
 import SwiftUI
+import Translation
 
 /// On-demand translation. Apple stays local; Google is an explicit cloud opt-in.
 /// Text and credentials are never logged or written to translation history.
@@ -21,9 +22,12 @@ final class TranslationService: NSObject, ObservableObject, NSWindowDelegate, AV
     @Published private(set) var output = ""
     @Published private(set) var message: String?
     @Published private(set) var googleFailure: GoogleTranslationError?
+    @Published private(set) var canRetry = false
+    @Published private(set) var isPinned = false
     @Published private(set) var busy = false
     @Published private(set) var copied = false
     @Published private(set) var copiedOriginal = false
+    @Published private(set) var customShortcutUnavailable = false
     @Published private(set) var request: TranslationRequest?
     @Published private(set) var presentation: TranslationPresentation = .editor
     @Published private(set) var speakingPart: TranslationSpeechPart?
@@ -54,6 +58,9 @@ final class TranslationService: NSObject, ObservableObject, NSWindowDelegate, AV
     private var chineseVoice = TranslationSpeechLanguage.chineseVoice(
         UserDefaults.standard.string(forKey: DefaultsKey.translationChineseVoice))
     private var shortcutWasEnabled: Bool?
+    private lazy var customHotKey = TranslationGlobalHotKey { [weak self] in self?.translateSelection() }
+    private var selectionCopyInFlight = false
+    private var recordingShortcut = false
     private var panel: NSPanel?
     private var globalMonitor: Any?
     private var localMonitor: Any?
@@ -73,12 +80,15 @@ final class TranslationService: NSObject, ObservableObject, NSWindowDelegate, AV
 
     init(speechSynthesizer: AVSpeechSynthesizer? = nil,
          speechVoices: @escaping () -> [AVSpeechSynthesisVoice] = AVSpeechSynthesisVoice.speechVoices,
+         presentation: TranslationPresentation = .editor, panel: NSPanel? = nil,
          googleTranslation: @escaping (TranslationRequest) async throws -> String = TranslationService.translateWithGoogle,
          autoTranslationDelay: @escaping () async throws -> Void = {
              try await Task.sleep(nanoseconds: 600_000_000)
          }) {
         self.speechSynthesizer = speechSynthesizer
         self.speechVoices = speechVoices
+        self.presentation = presentation
+        self.panel = panel
         self.googleTranslation = googleTranslation
         self.autoTranslationDelay = autoTranslationDelay
         super.init()
@@ -130,6 +140,9 @@ final class TranslationService: NSObject, ObservableObject, NSWindowDelegate, AV
         checkGoogleUsageReminder()
         let supported: Bool
         if #available(macOS 15.0, *) { supported = true } else { supported = false }
+        let customEnabled = supported && UserDefaults.standard.bool(forKey: DefaultsKey.translationCustomShortcutEnabled)
+        customShortcutUnavailable = !customHotKey.update(shortcut:
+            customEnabled && !recordingShortcut && AXIsProcessTrusted() ? TranslationShortcut.load(from: .standard) : nil)
         guard enabled, supported else {
             stopListening()
             // Unrelated preference writes must not close the manually opened
@@ -171,6 +184,7 @@ final class TranslationService: NSObject, ObservableObject, NSWindowDelegate, AV
     func stop() {
         clearTranslationCache()
         subscriptions.removeAll()
+        _ = customHotKey.update(shortcut: nil)
         stopListening()
         close()
         started = false
@@ -185,13 +199,20 @@ final class TranslationService: NSObject, ObservableObject, NSWindowDelegate, AV
     }
 
     private func observe(_ event: NSEvent) {
-        guard !ShortcutCapture.isCapturing else { detector = .init(); return }
-        // Do not trigger when copying the result/input from our own translator.
-        guard panel?.isKeyWindow != true else { detector = .init(); return }
+        guard !ShortcutCapture.isCapturing else { detector = .init(); firstCopy = nil; return }
+        // Ignore our own editor and Settings (which can contain an API-key draft).
+        guard !selectionCopyInFlight, panel?.isKeyWindow != true,
+              NSWorkspace.shared.frontmostApplication?.processIdentifier != ProcessInfo.processInfo.processIdentifier
+        else { detector = .init(); firstCopy = nil; return }
         let modifiers = event.modifierFlags.intersection([.command, .control, .option, .shift])
         let isCopy = modifiers == .command && event.keyCode == UInt16(kVK_ANSI_C)
         let pid = NSWorkspace.shared.frontmostApplication?.processIdentifier ?? 0
-        if detector.observe(isCopy: isCopy, isRepeat: event.isARepeat, time: event.timestamp, pid: pid) {
+        observeCopy(isCopy: isCopy, isRepeat: event.isARepeat, time: event.timestamp, pid: pid)
+    }
+
+    func observeCopy(isCopy: Bool, isRepeat: Bool, time: TimeInterval, pid: pid_t) {
+        guard !readInFlight else { detector = .init(); firstCopy = nil; return }
+        if detector.observe(isCopy: isCopy, isRepeat: isRepeat, time: time, pid: pid) {
             // Give the second native Copy time to publish its pasteboard item.
             // Capture the source PID now; don't read another app's copy later.
             let token = generation.advance()
@@ -201,9 +222,9 @@ final class TranslationService: NSObject, ObservableObject, NSWindowDelegate, AV
                 guard let self, self.generation.accepts(token),
                       NSWorkspace.shared.frontmostApplication?.processIdentifier == pid else { return }
                 self.useCopiedText(requiringChangeAfter: observation?.changeCount, requiresFreshCopy: true,
-                                   presentation: .compact)
+                                   presentation: .compact, requiringSourcePID: pid)
             }
-        } else if isCopy, !event.isARepeat {
+        } else if isCopy, !isRepeat {
             let observation = CopyObservation()
             firstCopy = observation
             GeneralPasteboardAccess.shared.async(timeout: 0.6, { _ in NSPasteboard.general.changeCount },
@@ -222,9 +243,7 @@ final class TranslationService: NSObject, ObservableObject, NSWindowDelegate, AV
             preferredSize.width = TranslationCompactLayout.width(UserDefaults.standard.double(forKey: DefaultsKey.translationPopupWidth))
         }
         if panel == nil {
-            let created = TranslationPanel(contentRect: NSRect(origin: .zero, size: preferredSize),
-                styleMask: [.titled, .closable, .resizable, .nonactivatingPanel, .fullSizeContentView],
-                backing: .buffered, defer: false)
+            let created = TranslationWindowPolicy.makePanel(contentRect: NSRect(origin: .zero, size: preferredSize))
             created.title = strings.title
             created.titleVisibility = .hidden
             created.titlebarAppearsTransparent = true
@@ -232,15 +251,13 @@ final class TranslationService: NSObject, ObservableObject, NSWindowDelegate, AV
             for button in [NSWindow.ButtonType.closeButton, .miniaturizeButton, .zoomButton] {
                 created.standardWindowButton(button)?.isHidden = true
             }
-            created.level = .floating
-            created.hidesOnDeactivate = false
             created.isReleasedWhenClosed = false
-            created.collectionBehavior = [.moveToActiveSpace, .fullScreenAuxiliary]
             created.delegate = self
             created.contentView = NSHostingView(rootView: TranslationPanelView(model: self))
             panel = created
         }
         guard let panel else { return }
+        TranslationWindowPolicy.configure(panel, for: mode)
         panel.title = strings.title
         panel.contentMinSize = mode.minimumSize
         panel.contentMaxSize = NSSize(width: mode == .compact ? TranslationCompactLayout.widthRange.upperBound : .greatestFiniteMagnitude,
@@ -262,7 +279,8 @@ final class TranslationService: NSObject, ObservableObject, NSWindowDelegate, AV
             let y = min(max(preferredY, frame.minY), max(frame.minY, frame.maxY - panel.frame.height))
             panel.setFrameOrigin(NSPoint(x: x, y: y))
         }
-        panel.makeKeyAndOrderFront(nil)
+        panel.contentView?.layoutSubtreeIfNeeded()
+        TranslationWindowPolicy.present(panel, for: mode)
         updateDismissMonitors()
     }
 
@@ -306,7 +324,6 @@ final class TranslationService: NSObject, ObservableObject, NSWindowDelegate, AV
 
     func close() {
         cancelAutoTranslation()
-        googleFailure = nil
         stopSpeech()
         removeDismissMonitors()
         cloudTask?.cancel()
@@ -317,6 +334,8 @@ final class TranslationService: NSObject, ObservableObject, NSWindowDelegate, AV
         input = ""
         output = ""
         message = nil
+        googleFailure = nil
+        canRetry = false
         copied = false
         copiedOriginal = false
         copyToken = UUID()
@@ -324,7 +343,10 @@ final class TranslationService: NSObject, ObservableObject, NSWindowDelegate, AV
         // Release visible text and the engine session; bounded cache entries live until purge or exit.
         panel?.contentView = nil
         panel = nil
+        isPinned = false
     }
+
+    func windowWillClose(_ notification: Notification) { close() }
 
     func hideForSettings() {
         cancelAutoTranslation()
@@ -333,11 +355,15 @@ final class TranslationService: NSObject, ObservableObject, NSWindowDelegate, AV
         panel?.orderOut(nil)
     }
 
-    func windowWillClose(_ notification: Notification) { close() }
+    func togglePin() {
+        guard presentation == .compact else { return }
+        isPinned.toggle()
+        updateDismissMonitors()
+    }
 
     private func updateDismissMonitors() {
         removeDismissMonitors()
-        guard presentation == .compact else { return }
+        guard presentation == .compact, !isPinned, panel?.isVisible == true else { return }
         NotificationCenter.default.publisher(for: NSMenu.didBeginTrackingNotification)
             .sink { [weak self] _ in self?.trackingMenus += 1 }
             .store(in: &menuSubscriptions)
@@ -376,7 +402,7 @@ final class TranslationService: NSObject, ObservableObject, NSWindowDelegate, AV
             if event.window == nil { inside = panel.frame.contains(NSEvent.mouseLocation) }
         }
         guard TranslationDismissalPolicy.shouldDismiss(
-            presentation: presentation, isVisible: panel.isVisible, clickIsInside: inside,
+            presentation: presentation, isVisible: panel.isVisible, isPinned: isPinned, clickIsInside: inside,
             menuIsTracking: trackingMenus > 0,
             hasModal: panel.attachedSheet != nil || NSApp.modalWindow != nil,
             isAssistiveKeyboard: !isLocal && AssistiveKeyboard.ownsCocoaPoint(NSEvent.mouseLocation))
@@ -393,11 +419,55 @@ final class TranslationService: NSObject, ObservableObject, NSWindowDelegate, AV
         trackingMenus = 0
     }
 
+    func setRecordingShortcut(_ recording: Bool) {
+        recordingShortcut = recording
+        syncWithPreferences()
+    }
+
+    private func translateSelection() {
+        guard !selectionCopyInFlight, !readInFlight, !busy, AXIsProcessTrusted(),
+              !recordingShortcut,
+              UserDefaults.standard.bool(forKey: DefaultsKey.translationCustomShortcutEnabled),
+              let pid = NSWorkspace.shared.frontmostApplication?.processIdentifier,
+              pid != ProcessInfo.processInfo.processIdentifier else { return }
+        selectionCopyInFlight = true
+        readInFlight = true
+        detector = .init()
+        firstCopy = nil
+        let token = generation.advance()
+        GeneralPasteboardAccess.shared.async(timeout: 0.6, { _ in NSPasteboard.general.changeCount },
+            then: { [weak self] baseline in
+                guard let self else { return }
+                guard let baseline, self.generation.accepts(token), AXIsProcessTrusted(),
+                      UserDefaults.standard.bool(forKey: DefaultsKey.translationCustomShortcutEnabled),
+                      NSWorkspace.shared.frontmostApplication?.processIdentifier == pid,
+                      let down = CGEvent(keyboardEventSource: nil, virtualKey: CGKeyCode(kVK_ANSI_C), keyDown: true),
+                      let up = CGEvent(keyboardEventSource: nil, virtualKey: CGKeyCode(kVK_ANSI_C), keyDown: false)
+                else { self.selectionCopyInFlight = false; return }
+                down.flags = .maskCommand
+                up.flags = .maskCommand
+                // Target the captured app so a focus change cannot copy from another app.
+                down.postToPid(pid)
+                up.postToPid(pid)
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.18) { [weak self] in
+                    guard let self else { return }
+                    self.selectionCopyInFlight = false
+                    guard self.generation.accepts(token), AXIsProcessTrusted(),
+                          UserDefaults.standard.bool(forKey: DefaultsKey.translationCustomShortcutEnabled),
+                          NSWorkspace.shared.frontmostApplication?.processIdentifier == pid else { return }
+                    self.useCopiedText(requiringChangeAfter: baseline, requiresFreshCopy: true,
+                                       presentation: .compact, requiringSourcePID: pid)
+                }
+            }, didFinish: { [weak self] _ in self?.readInFlight = false })
+    }
+
     func useCopiedText(requiringChangeAfter baseline: Int? = nil, requiresFreshCopy: Bool = false,
-                       presentation mode: TranslationPresentation? = nil) {
-        guard !readInFlight else { return }
+                       presentation mode: TranslationPresentation? = nil, requiringSourcePID sourcePID: pid_t? = nil) {
+        guard !readInFlight,
+              sourcePID == nil || NSWorkspace.shared.frontmostApplication?.processIdentifier == sourcePID else { return }
         cancelAutoTranslation()
         googleFailure = nil
+        canRetry = false
         stopSpeech()
         cloudTask?.cancel()
         cloudTask = nil
@@ -408,19 +478,18 @@ final class TranslationService: NSObject, ObservableObject, NSWindowDelegate, AV
         output = ""
         readInFlight = true
         GeneralPasteboardAccess.shared.async(timeout: 1.0, { _ -> Result<String, TranslationInputError>? in
-            let pasteboard = NSPasteboard.general
-            guard !requiresFreshCopy || TranslationTextPlan.isFreshCopy(baseline: baseline, current: pasteboard.changeCount)
-            else { return .failure(.empty) }
-            let types = Set((pasteboard.types ?? []).map(\.rawValue))
-            guard TranslationTextPlan.protectedTypes.isDisjoint(with: types) else {
-                return .failure(.sensitive)
-            }
-            let text = pasteboard.string(forType: .string) ?? ""
-            do { return .success(try TranslationTextPlan.validate(text, types: types)) }
-            catch let error as TranslationInputError { return .failure(error) }
+            do {
+                return .success(try GeneralPasteboardAccess.translationText(from: .general,
+                    requiringChangeAfter: baseline, requiresFreshCopy: requiresFreshCopy))
+            } catch let error as TranslationInputError { return .failure(error) }
             catch { return .failure(.empty) }
         }, then: { [weak self] result in
             guard let self, self.generation.accepts(token) else { return }
+            if let sourcePID, NSWorkspace.shared.frontmostApplication?.processIdentifier != sourcePID {
+                self.busy = false
+                self.message = nil
+                return
+            }
             self.open(mode ?? self.presentation)
             self.busy = false
             self.message = nil
@@ -437,6 +506,7 @@ final class TranslationService: NSObject, ObservableObject, NSWindowDelegate, AV
     func inputDidChange() {
         cancelAutoTranslation()
         googleFailure = nil
+        canRetry = false
         stopSpeech()
         cloudTask?.cancel()
         cloudTask = nil
@@ -537,8 +607,9 @@ final class TranslationService: NSObject, ObservableObject, NSWindowDelegate, AV
 
     func translate() {
         cancelAutoTranslation()
-        googleFailure = nil
         stopSpeech()
+        googleFailure = nil
+        canRetry = false
         do { _ = try TranslationTextPlan.validate(input) }
         catch { message = inputMessage(error); return }
         rememberLanguages()
@@ -582,6 +653,11 @@ final class TranslationService: NSObject, ObservableObject, NSWindowDelegate, AV
         }
     }
 
+    func retryTranslation() {
+        guard canRetry, !busy else { return }
+        translate()
+    }
+
     static func translateWithGoogle(_ pending: TranslationRequest) async throws -> String {
         let key = try await Task.detached { try TranslationKeychain().load() }.value
         try Task.checkCancellation()
@@ -603,8 +679,9 @@ final class TranslationService: NSObject, ObservableObject, NSWindowDelegate, AV
 
     func cancel() {
         cancelAutoTranslation()
-        googleFailure = nil
         stopSpeech()
+        googleFailure = nil
+        canRetry = false
         cloudTask?.cancel()
         cloudTask = nil
         generation.advance()
@@ -616,6 +693,7 @@ final class TranslationService: NSObject, ObservableObject, NSWindowDelegate, AV
     func finish(_ id: UUID, result: Result<String, Error>) {
         guard let pending = request, pending.id == id else { return }
         googleFailure = nil
+        canRetry = false
         cloudTask = nil
         busy = false
         switch result {
@@ -627,16 +705,56 @@ final class TranslationService: NSObject, ObservableObject, NSWindowDelegate, AV
                 cachedTranslationCount = resultCache.count
             }
         case .failure(let error):
-            if error is CancellationError { message = nil }
-            else if error is TranslationUnsupportedPair { message = strings.unsupported }
-            else if error is TranslationUnknownSource { message = strings.unknownSource }
-            else if let error = error as? GoogleTranslationError {
+            if #available(macOS 15.0, *) {
+            switch error {
+            case is CancellationError:
+                message = nil
+            case let error as URLError where error.code == .cancelled:
+                message = nil
+            case is TranslationUnsupportedPair:
+                message = strings.unsupported
+            case is TranslationUnknownSource:
+                message = strings.unknownSource
+            case TranslationError.unsupportedSourceLanguage, TranslationError.unsupportedTargetLanguage,
+                 TranslationError.unsupportedLanguagePairing:
+                message = strings.unsupported
+            case TranslationError.unableToIdentifyLanguage:
+                message = strings.unknownSource
+            case TranslationError.nothingToTranslate:
+                message = strings.empty
+            case let error as GoogleTranslationError:
                 googleFailure = error
                 message = strings.googleError(error)
+                canRetry = [.network, .quota, .unavailable, .invalidResponse].contains(error)
+            case is TranslationKeychain.Failure:
+                message = strings.keychainFailed
+                canRetry = true
+            case is TranslationInputError:
+                message = inputMessage(error)
+            case is URLError:
+                message = strings.networkFailed
+                canRetry = true
+            default:
+                message = strings.failed
+                canRetry = true
+                // Xcode 16 builds remain supported; these errors arrived in the macOS 26 SDK.
+                #if compiler(>=6.2)
+                if #available(macOS 26.0, *), TranslationError.alreadyCancelled ~= error {
+                    message = nil
+                    canRetry = false
+                } else if #available(macOS 26.0, *), TranslationError.notInstalled ~= error {
+                    message = strings.languagesNotInstalled
+                }
+                #endif
             }
-            else if error is TranslationKeychain.Failure { message = strings.keychainFailed }
-            else if error is TranslationInputError { message = inputMessage(error) }
-            else { message = strings.failed }
+            } else {
+                message = strings.osRequired
+            }
+            if let message, Bundle.main.bundleIdentifier != nil {
+                NSAccessibility.post(element: NSApplication.shared, notification: .announcementRequested,
+                                     userInfo: [.announcement: message,
+                                                .priority: NSAccessibilityPriorityLevel.medium.rawValue])
+            }
         }
         request = nil
     }
@@ -731,13 +849,18 @@ final class TranslationService: NSObject, ObservableObject, NSWindowDelegate, AV
         }
     }
 
-    func copyOriginal() { copy(original: true) }
+    func copyOutput() {
+        copyText(output, original: false)
+    }
 
-    func copyOutput() { copy(original: false) }
+    func copyOriginal() {
+        copyText(input, original: true)
+    }
 
-    private func copy(original: Bool) {
-        let text = original ? input : output
-        guard !text.isEmpty, !busy else { return }
+    private func copyText(_ text: String, original: Bool) {
+        guard !text.isEmpty else { return }
+        copied = false
+        copiedOriginal = false
         let token = UUID()
         copyToken = token
         // Mark this explicit copy transient so clipboard history doesn't turn
@@ -760,6 +883,7 @@ final class TranslationService: NSObject, ObservableObject, NSWindowDelegate, AV
         switch error {
         case TranslationInputError.tooLong: return strings.tooLong
         case TranslationInputError.sensitive: return strings.sensitive
+        case TranslationInputError.clipboardChanged: return strings.clipboardChanged
         default: return strings.empty
         }
     }
@@ -768,8 +892,38 @@ final class TranslationService: NSObject, ObservableObject, NSWindowDelegate, AV
 struct TranslationUnsupportedPair: Error {}
 struct TranslationUnknownSource: Error {}
 
-private final class TranslationPanel: NSPanel {
+enum TranslationWindowPolicy {
+    // Keep one activating host across modes so editor selection can activate the app without restarting translation.
+    static func makePanel(contentRect: NSRect) -> TranslationPanel {
+        TranslationPanel(contentRect: contentRect,
+            styleMask: [.titled, .closable, .resizable, .fullSizeContentView],
+            backing: .buffered, defer: false)
+    }
+
+    static func configure(_ panel: NSPanel, for presentation: TranslationPresentation) {
+        let compact = presentation == .compact
+        panel.isFloatingPanel = compact
+        panel.level = compact ? .floating : .normal
+        panel.hidesOnDeactivate = false
+        panel.collectionBehavior = compact
+            ? [.moveToActiveSpace, .fullScreenAuxiliary, .transient] : [.managed]
+    }
+
+    static func present(_ panel: NSPanel, for presentation: TranslationPresentation) {
+        if presentation == .compact {
+            if panel.isMainWindow { panel.resignMain() }
+            // Show the result without taking keyboard focus from the app that supplied the text.
+            panel.orderFrontRegardless()
+        } else {
+            NSApp.activate(ignoringOtherApps: true)
+            panel.makeKeyAndOrderFront(nil)
+            panel.makeMain()
+        }
+    }
+}
+
+final class TranslationPanel: NSPanel {
     override var canBecomeKey: Bool { true }
-    override var canBecomeMain: Bool { false }
+    override var canBecomeMain: Bool { !isFloatingPanel }
     override func cancelOperation(_ sender: Any?) { close() }
 }

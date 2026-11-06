@@ -2,9 +2,11 @@
 // Copyright (C) 2026 Vorssaint
 
 import Foundation
+import Carbon.HIToolbox
 
 enum TranslationTests {
     static func run(_ suite: TestSuite) {
+        checkCustomShortcut(suite)
         TranslationCacheChecks.run { suite.expect($0, $1) }
         TranslationSpeechTests.run(suite)
         GoogleTranslationUsageTests.run(suite)
@@ -84,16 +86,17 @@ enum TranslationTests {
                      TranslationPresentation.compact.preferredSize.height < TranslationPresentation.editor.preferredSize.height,
                      "editing expands the compact result into a larger workspace")
         for mode in [TranslationPresentation.compact, .editor] {
-            for mask in 0..<32 {
+            for mask in 0..<64 {
                 let visible = mask & 1 != 0
                 let inside = mask & 2 != 0
                 let menu = mask & 4 != 0
                 let modal = mask & 8 != 0
                 let keyboard = mask & 16 != 0
+                let pinned = mask & 32 != 0
                 suite.expect(TranslationDismissalPolicy.shouldDismiss(
-                    presentation: mode, isVisible: visible, clickIsInside: inside,
+                    presentation: mode, isVisible: visible, isPinned: pinned, clickIsInside: inside,
                     menuIsTracking: menu, hasModal: modal, isAssistiveKeyboard: keyboard) ==
-                    (mode == .compact && visible && !inside && !menu && !modal && !keyboard),
+                    (mode == .compact && visible && !pinned && !inside && !menu && !modal && !keyboard),
                     "outside clicks dismiss only visible compact results, not editor/menu/modal/assistive interactions")
             }
         }
@@ -179,6 +182,38 @@ enum TranslationTests {
             done.signal()
         }
         suite.expect(done.wait(timeout: .now() + 10) == .success, "async pipeline fixtures finish within a bounded wait")
+    }
+
+    private static func checkCustomShortcut(_ suite: TestSuite) {
+        suite.expect(Defaults.registeredDefaults[DefaultsKey.translationCustomShortcutEnabled] as? Bool == false,
+                     "custom translation shortcuts stay opt-in after updating Vorssaint")
+        suite.expect(SettingsBackupSupport.exportKeys().contains(DefaultsKey.translationShortcut) &&
+                     SettingsBackupSupport.exportKeys().contains(DefaultsKey.translationCustomShortcutEnabled),
+                     "settings backups retain the custom translation key combination and enabled state")
+        suite.expect(TranslationShortcut.defaultValue.isValid && TranslationShortcut.defaultValue.displayString == "⌃⌥T",
+                     "custom translation starts with Control-Option-T")
+        for shortcut in [TranslationShortcut(keyCode: UInt32(kVK_ANSI_C), modifiers: UInt32(cmdKey)),
+                         TranslationShortcut(keyCode: UInt32(kVK_ANSI_T), modifiers: 0),
+                         TranslationShortcut(keyCode: 65_535, modifiers: UInt32(controlKey)),
+                         TranslationShortcut(keyCode: UInt32(kVK_ANSI_T), modifiers: UInt32(controlKey) | 0x8000_0000)] {
+            suite.expect(!shortcut.isValid, "unsafe common shortcuts, unknown keys and unknown modifiers are rejected")
+        }
+        let domain = "com.vorssaint.tests.translation-shortcut.\(UUID().uuidString)"
+        guard let defaults = UserDefaults(suiteName: domain) else {
+            suite.expect(false, "isolated shortcut preferences are available"); return
+        }
+        defer { defaults.removePersistentDomain(forName: domain) }
+        let custom = TranslationShortcut(keyCode: UInt32(kVK_ANSI_J), modifiers: UInt32(controlKey | optionKey | shiftKey))
+        custom.save(to: defaults)
+        suite.expect(TranslationShortcut.load(from: defaults) == custom && custom.displayString == "⌃⌥⇧J",
+                     "custom shortcut key codes and modifiers round-trip without changing order")
+        defaults.set(Data("invalid shortcut json".utf8), forKey: DefaultsKey.translationShortcut)
+        suite.expect(TranslationShortcut.load(from: defaults) == .defaultValue,
+                     "corrupt imported shortcuts restore the safe default")
+        let invalid = TranslationShortcut(keyCode: UInt32(kVK_ANSI_C), modifiers: UInt32(cmdKey))
+        defaults.set(try? JSONEncoder().encode(invalid), forKey: DefaultsKey.translationShortcut)
+        suite.expect(TranslationShortcut.load(from: defaults) == .defaultValue,
+                     "unsafe decoded shortcut values are validated before registration")
     }
 
     private static func checkStableLanguageTabs(_ suite: TestSuite) {
@@ -270,6 +305,31 @@ enum TranslationTests {
             } catch {
                 suite.expect(error as? GoogleTranslationError == expected && calls == 1,
                              "cloud HTTP errors are sanitized and never automatically retried")
+            }
+        }
+        let reasonFixtures: [(Int, String, GoogleTranslationError)] = [
+            (403, #"{"error":{"errors":[{"reason":"dailyLimitExceeded"}]}}"#, .quota),
+            (403, #"{"error":{"message":"User Rate Limit Exceeded"}}"#, .quota),
+            (403, #"{"error":{"status":"RESOURCE_EXHAUSTED"}}"#, .quota),
+            (403, #"{"error":{"details":[{"@type":"type.googleapis.com/google.rpc.ErrorInfo","reason":"RATE_LIMIT_EXCEEDED"}]}}"#, .quota),
+            (400, #"{"error":{"errors":[{"reason":"keyInvalid"}]}}"#, .invalidKey),
+            (400, #"{"error":{"details":[{"@type":"type.googleapis.com/google.rpc.ErrorInfo","reason":"API_KEY_INVALID"}]}}"#, .invalidKey),
+            (400, #"{"error":{"details":[{"@type":"other.Type","reason":"API_KEY_INVALID"}]}}"#, .invalidRequest),
+            (403, #"{"error":{"errors":[{"reason":"accessNotConfigured"}]}}"#, .denied),
+            (503, #"{"error":{"errors":[{"reason":"keyInvalid"}]}}"#, .unavailable),
+        ]
+        for (status, body, expected) in reasonFixtures {
+            var calls = 0
+            let failing = GoogleTranslationClient(recordUsage: { _ in }) { request in
+                calls += 1
+                return (Data(body.utf8), HTTPURLResponse(url: request.url!, statusCode: status, httpVersion: nil, headerFields: nil)!)
+            }
+            do {
+                _ = try await failing.translate(TranslationRequest(text: "Hello", source: "en", target: "zh-Hans"), key: fakeKey)
+                suite.expect(false, "reason-specific Google failure must not return a translation")
+            } catch {
+                suite.expect(error as? GoogleTranslationError == expected && calls == 1,
+                             "Google quota/key reasons produce the right sanitized error without retry")
             }
         }
         for payload in ["{}", "{\"data\":{\"translations\":[]}}", "not JSON"] {

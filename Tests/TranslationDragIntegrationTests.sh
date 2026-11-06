@@ -9,7 +9,8 @@
 # --usage-only checks notification deadlocks with memory-only settings and fake HTTP, without windows.
 # --scroll-only checks initial result positioning in native panels using fixture text and fake speech.
 # --language-only checks language history and renders hidden selector/editor fixtures.
-# --ui-parity runs the isolated typing, controls, language, scroll, speech and usage checks.
+# --feature-parity checks recovery, pinning, short-word detection and both clipboard/tab regressions.
+# --ui-parity runs the isolated typing, controls, language, scroll, speech, usage and feature checks.
 # --typing-only checks debounce/cancellation with fixture text and no mounted engine.
 set -euo pipefail
 cd "$(dirname "$0")/.."
@@ -27,17 +28,22 @@ swiftc -parse-as-library -target "$translation_drag_arch-apple-macos15.0" -sdk "
     Tests/Integration/TranslationLanguageChecks.swift \
     Tests/Integration/TranslationTypingChecks.swift \
     Tests/Integration/TranslationCacheServiceChecks.swift \
+    Tests/Integration/TranslationFeatureParityChecks.swift \
     Sources/Vorssaint/Services/Translation/TranslationService.swift \
     Sources/Vorssaint/Services/Translation/TranslationSupport.swift \
     Sources/Vorssaint/Services/Translation/TranslationSpeechSupport.swift \
     Sources/Vorssaint/Services/Translation/TranslationLineBreakCleanup.swift \
     Sources/Vorssaint/Services/Translation/TranslationLanguageDetection.swift \
+    Sources/Vorssaint/Services/Translation/TranslationPasteboardSupport.swift \
+    Sources/Vorssaint/Core/TranslationShortcut.swift \
     Sources/Vorssaint/Services/Translation/GoogleTranslationClient.swift \
     Sources/Vorssaint/Services/Translation/GoogleTranslationUsageStore.swift \
     Sources/Vorssaint/Core/TranslationStrings.swift \
     Sources/Vorssaint/UI/Translation/TranslationPanelView.swift \
     Sources/Vorssaint/UI/Translation/TranslationLanguageSelector.swift \
     Sources/Vorssaint/UI/Translation/TranslationEngineControl.swift \
+    Sources/Vorssaint/UI/Translation/TranslationSetupGuides.swift \
+    Sources/Vorssaint/UI/Translation/AccessibilityPermissionView.swift \
     Sources/Vorssaint/UI/Settings/GoogleTranslationUsageView.swift \
     Sources/Vorssaint/UI/Settings/TranslationSpeechSettings.swift \
     Sources/Vorssaint/Services/GeneralPasteboardAccess.swift \
@@ -49,7 +55,7 @@ if (( ${argv[(Ie)--ui-parity]} )); then
             *) print -u2 '--ui-parity accepts only render options.'; exit 2 ;;
         esac
     done
-    for translation_drag_mode in --typing-only --engine-only --language-only --scroll-only --speech-only --usage-only; do
+    for translation_drag_mode in --typing-only --engine-only --language-only --scroll-only --speech-only --usage-only --feature-parity; do
         "$translation_drag_dir/checks" "$translation_drag_mode" "$@"
     done
 else

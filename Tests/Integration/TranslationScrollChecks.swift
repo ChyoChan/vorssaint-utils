@@ -46,7 +46,7 @@ enum TranslationScrollChecks {
             RunLoop.main.run(until: Date().addingTimeInterval(duration))
         }
         func panel() -> NSWindow? {
-            app.windows.first { $0.title == "Translation" && $0.contentView != nil && $0.level == .floating }
+            app.windows.first { $0 is TranslationPanel && $0.title == "Translation" && $0.contentView != nil }
         }
         func scrollViews(in view: NSView) -> [NSScrollView] {
             if let scroll = view as? NSScrollView { return [scroll] }
@@ -55,7 +55,7 @@ enum TranslationScrollChecks {
         func resultScroll() -> NSScrollView? {
             guard let root = panel()?.contentView else { return nil }
             // In the editor the result is the rightmost scroll view; compact has one.
-            return scrollViews(in: root).max {
+            return scrollViews(in: root).filter { $0.contentView.bounds.height > 80 }.max {
                 root.convert($0.bounds, from: $0).minX < root.convert($1.bounds, from: $1).minX
             }
         }

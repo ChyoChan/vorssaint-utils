@@ -372,6 +372,8 @@ if (( TEST )); then
         Sources/Vorssaint/Services/ReleaseUpdateService.swift
         Sources/Vorssaint/Services/Translation/TranslationSupport.swift
         Sources/Vorssaint/Services/Translation/TranslationLanguageDetection.swift
+        Sources/Vorssaint/Services/Translation/TranslationPasteboardSupport.swift
+        Sources/Vorssaint/Core/TranslationShortcut.swift
         Sources/Vorssaint/Services/Translation/TranslationSpeechSupport.swift
         Sources/Vorssaint/Services/Translation/TranslationLineBreakCleanup.swift
         Sources/Vorssaint/Services/Translation/GoogleTranslationClient.swift

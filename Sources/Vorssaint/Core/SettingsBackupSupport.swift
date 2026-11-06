@@ -46,6 +46,7 @@ enum SettingsBackupSupport {
     /// Preferences stored without a registered default (absence means "use
     /// the built-in behavior"), still part of how the user set the app up.
     static let unregisteredPreferenceKeys: Set<String> = [
+        DefaultsKey.translationShortcut,
         DefaultsKey.autoQuitEnabled,
         DefaultsKey.shelfEnabled,
         DefaultsKey.finderCutPasteEnabled,

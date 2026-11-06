@@ -9,6 +9,8 @@ import Foundation
 enum DefaultsKey {
     static let language = "appLanguage"                   // AppLanguage.rawValue
     static let translationDoubleCopyEnabled = "translationDoubleCopyEnabled"
+    static let translationCustomShortcutEnabled = "translationCustomShortcutEnabled"
+    static let translationShortcut = "translationShortcut"
     static let translationEngine = "translationEngine"
     static let translationRecentSourceLanguages = "translationRecentSourceLanguages"
     static let translationRecentTargetLanguages = "translationRecentTargetLanguages"
@@ -1223,6 +1225,7 @@ enum Defaults {
         DefaultsKey.keepAwakeSeparateMenuBarItem: false,
         DefaultsKey.translationDoubleCopyEnabled: true,
         DefaultsKey.translationEngine: TranslationEngine.apple.rawValue,
+        DefaultsKey.translationCustomShortcutEnabled: false,
         DefaultsKey.translationRecentSourceLanguages: TranslationRecentLanguages.fallback,
         DefaultsKey.translationRecentTargetLanguages: TranslationLanguageDefaults.languages,
         DefaultsKey.translationGoogleUsageReminderEnabled: true,

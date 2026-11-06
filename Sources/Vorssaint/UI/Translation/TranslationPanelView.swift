@@ -61,6 +61,10 @@ struct TranslationPanelView: View {
             .accessibilityLabel("Vorssaint")
     }
 
+    private var showsTranslationAction: Bool {
+        model.busy || (model.output.isEmpty && !model.input.isEmpty && model.message == nil)
+    }
+
     private var compactContent: some View {
         VStack(spacing: 10) {
             HStack(spacing: 10) {
@@ -68,6 +72,7 @@ struct TranslationPanelView: View {
                 enginePicker
                 Spacer(minLength: 0)
                 HStack(spacing: 8) {
+                    pinButton
                     presentationButton
                     closeButton
                 }
@@ -76,11 +81,8 @@ struct TranslationPanelView: View {
             resultText(compact: true)
                 .background(Color(nsColor: .textBackgroundColor), in: RoundedRectangle(cornerRadius: 8))
                 .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(Color(nsColor: .separatorColor)))
-            if model.busy || (model.output.isEmpty && !model.input.isEmpty) {
-                Button(model.busy ? text.cancel : text.translate) {
-                    if model.busy { model.cancel() }
-                    else { model.translate() }
-                }
+            if showsTranslationAction {
+                translationActionButton
                 .controlSize(.large)
                 .frame(maxWidth: .infinity, alignment: .trailing)
             }
@@ -145,12 +147,20 @@ struct TranslationPanelView: View {
         }
     }
 
+    private var translationActionButton: some View {
+        Button(model.busy ? text.cancel : text.translate) {
+            if model.busy { model.cancel() }
+            else { model.translate() }
+        }
+        .accessibilityIdentifier(model.busy ? "translationCancel" : "translationStart")
+    }
+
     private func languageActions(_ part: TranslationSpeechPart) -> some View {
         HStack {
             speechButton(part)
             Spacer(minLength: 8)
-            if part == .original, model.busy, model.presentation == .editor {
-                Button(text.cancel) { model.cancel() }.font(.callout)
+            if part == .original, model.presentation == .editor, showsTranslationAction {
+                translationActionButton.font(.callout)
                 Spacer(minLength: 8)
             }
             copyButton(part)
@@ -203,12 +213,24 @@ struct TranslationPanelView: View {
         .accessibilityIdentifier(compact ? "translationEditView" : "translationCompactView")
     }
 
+    private var pinButton: some View {
+        Button { model.togglePin() } label: {
+            Image(systemName: model.isPinned ? "pin.fill" : "pin")
+        }
+        .buttonStyle(TranslationToolbarButtonStyle(isSelected: model.isPinned))
+        .help(model.isPinned ? text.unpinPopup : text.pinPopup)
+        .accessibilityLabel(model.isPinned ? text.unpinPopup : text.pinPopup)
+        .accessibilityValue(model.isPinned ? text.pinned : text.notPinned)
+        .accessibilityAddTraits(model.isPinned ? .isSelected : [])
+        .accessibilityIdentifier("translationPin")
+    }
+
     private var closeButton: some View {
         Button { model.close() } label: { Image(systemName: "xmark") }
             .buttonStyle(TranslationToolbarButtonStyle(isClose: true))
             .accessibilityLabel(text.close)
             .accessibilityIdentifier("translationClose")
-            .help(text.close)
+            .help(text.closeHelp)
             .keyboardShortcut(.cancelAction)
     }
 
@@ -244,11 +266,14 @@ struct TranslationPanelView: View {
                                     Text(message)
                                         .font(.system(size: compact ? TranslationCompactLayout.fontSize(popupFontSize) : 18))
                                         .textSelection(.enabled)
-                                    if !compact, !model.input.isEmpty {
-                                        Button(text.retry) { model.translate() }
-                                            .buttonStyle(.bordered)
-                                            .keyboardShortcut(.return, modifiers: .command)
-                                            .accessibilityIdentifier("translationRetry")
+                                    if model.canRetry {
+                                        Button { model.retryTranslation() } label: {
+                                            Label(text.retry, systemImage: "arrow.clockwise")
+                                        }
+                                        .buttonStyle(.borderedProminent)
+                                        .controlSize(.large)
+                                        .keyboardShortcut(.return, modifiers: .command)
+                                        .accessibilityIdentifier("translationRetry")
                                     }
                                     if model.offersGoogleKeySetup {
                                         Button(action: openTranslationSettings) {
@@ -287,7 +312,7 @@ struct TranslationPanelView: View {
                     if compact {
                         GeometryReader { geometry in
                             // Include the action row here so its visibility also updates the fitted height.
-                            let actionHeight: CGFloat = model.busy || (model.output.isEmpty && !model.input.isEmpty) ? 42 : 0
+                            let actionHeight: CGFloat = showsTranslationAction ? 42 : 0
                             Color.clear.preference(key: TranslationResultHeight.self,
                                                    value: geometry.size.height + 116 + actionHeight)
                         }
@@ -297,6 +322,7 @@ struct TranslationPanelView: View {
             .onPreferenceChange(TranslationResultHeight.self) { height in
                 guard compact, height > 0 else { return }
                 model.fitCompactContent(height: height)
+                scrollToTranslation(proxy, compact: compact)
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .accessibilityLabel(compact ? text.title : text.result)
@@ -333,6 +359,7 @@ struct TranslationPanelView: View {
 
 private struct TranslationToolbarButtonStyle: ButtonStyle {
     var isClose = false
+    var isSelected = false
     @State private var hovered = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.isEnabled) private var isEnabled
@@ -341,12 +368,14 @@ private struct TranslationToolbarButtonStyle: ButtonStyle {
         configuration.label
             .font(.system(size: 16))
             .foregroundStyle(hovered && isClose ? Color.red :
-                (hovered || configuration.isPressed ? Color.primary : Color.secondary))
+                (isSelected ? Color.accentColor :
+                    (hovered || configuration.isPressed ? Color.primary : Color.secondary)))
             .frame(width: 34, height: 34)
             .background {
                 RoundedRectangle(cornerRadius: 8)
                     .fill(configuration.isPressed ? Color.primary.opacity(0.14) :
-                        (hovered ? (isClose ? Color.red.opacity(0.12) : Color.primary.opacity(0.07)) : .clear))
+                        (isSelected ? Color.accentColor.opacity(0.14) :
+                            (hovered ? (isClose ? Color.red.opacity(0.12) : Color.primary.opacity(0.07)) : .clear)))
             }
             .contentShape(RoundedRectangle(cornerRadius: 8))
             .opacity(isEnabled ? 1 : 0.4)

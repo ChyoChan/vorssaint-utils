@@ -112,10 +112,10 @@ enum TranslationCompactLayout {
 }
 
 enum TranslationDismissalPolicy {
-    static func shouldDismiss(presentation: TranslationPresentation, isVisible: Bool,
+    static func shouldDismiss(presentation: TranslationPresentation, isVisible: Bool, isPinned: Bool = false,
                               clickIsInside: Bool, menuIsTracking: Bool,
                               hasModal: Bool, isAssistiveKeyboard: Bool) -> Bool {
-        presentation == .compact && isVisible && !clickIsInside &&
+        presentation == .compact && isVisible && !isPinned && !clickIsInside &&
             !menuIsTracking && !hasModal && !isAssistiveKeyboard
     }
 }
@@ -141,7 +141,7 @@ struct TranslationDoubleCopyDetector {
     }
 }
 
-enum TranslationInputError: Error { case empty, tooLong, sensitive }
+enum TranslationInputError: Error { case empty, tooLong, sensitive, clipboardChanged }
 
 /// Bound work without splitting or rewriting the selected text.
 enum TranslationTextPlan {

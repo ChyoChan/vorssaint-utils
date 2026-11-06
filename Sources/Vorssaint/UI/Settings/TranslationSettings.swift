@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Vorssaint
 
+import AppKit
 import SwiftUI
 
 struct TranslationSettings: View {
@@ -9,6 +10,8 @@ struct TranslationSettings: View {
     @ObservedObject private var translation = TranslationService.shared
     @ObservedObject private var credentials = TranslationCredentials.shared
     @AppStorage(DefaultsKey.translationDoubleCopyEnabled) private var enabled = true
+    @AppStorage(DefaultsKey.translationCustomShortcutEnabled) private var customShortcutEnabled = false
+    @State private var shortcut = TranslationShortcut.load(from: .standard)
     @AppStorage(DefaultsKey.translationPDFLineBreakCleanup) private var pdfLineBreakCleanup = true
     @AppStorage(DefaultsKey.translationPopupWidth) private var popupWidth = TranslationCompactLayout.defaultWidth
     @AppStorage(DefaultsKey.translationPopupFontSize) private var popupFontSize = TranslationCompactLayout.defaultFontSize
@@ -27,6 +30,8 @@ struct TranslationSettings: View {
                     Text(translation.privacyNotice).font(.caption).foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
                     VStack(alignment: .leading, spacing: 8) {
+                        GoogleAPISetupGuide(language: l10n.language)
+                        Divider()
                         Text(text.apiKey).font(.subheadline.weight(.medium))
                         SecureField(text.keyPlaceholder, text: $keyDraft)
                             .textFieldStyle(.roundedBorder)
@@ -52,18 +57,52 @@ struct TranslationSettings: View {
                     }
                     Divider()
                     GoogleTranslationUsageView()
+                } else {
+                    Text(translation.privacyNotice).font(.caption).foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                    AppleLanguagePackSetup(language: l10n.language)
                 }
                 Divider()
                 Toggle(text.enable, isOn: $enabled)
                     .toggleStyle(.switch)
-                    .onChange(of: enabled) { _, _ in translation.syncWithPreferences() }
+                    .onChange(of: enabled) { _, _ in permissions.refresh(); translation.syncWithPreferences() }
                 Text(text.caption).font(.caption).foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
-                if enabled && !permissions.accessibility {
-                    Text(text.permission).font(.caption).foregroundStyle(.secondary)
+                Text(text.localized("Enable double ⌘C in only one translation app to avoid duplicate popups.",
+                                    "請只在一個翻譯 App 啟用雙 ⌘C，避免重複彈窗。",
+                                    "请只在一个翻译 App 中启用双按 ⌘C，避免重复弹窗。",
+                                    "ポップアップの重複を避けるため、⌘C の 2 回押しは 1 つの翻訳アプリだけで有効にしてください。"))
+                    .font(.caption).foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                Toggle(text.localized("Custom translation shortcut", "自訂翻譯快捷鍵", "自定义翻译快捷键", "翻訳ショートカットをカスタマイズ"), isOn: $customShortcutEnabled)
+                    .toggleStyle(.switch)
+                    .onChange(of: customShortcutEnabled) { _, _ in permissions.refresh(); translation.syncWithPreferences() }
+                if customShortcutEnabled {
+                    HStack {
+                        Text(text.localized("Shortcut", "快捷鍵", "快捷键", "ショートカット"))
+                        Spacer()
+                        TranslationShortcutRecorder(shortcut: $shortcut, onRecordingChanged: translation.setRecordingShortcut)
+                            .frame(width: 180)
+                            .onChange(of: shortcut) { _, value in value.save(to: .standard); translation.syncWithPreferences() }
+                        Button(text.localized("Reset", "重設", "重置", "リセット")) { shortcut = .defaultValue }
+                    }
+                    Text(text.localized("Click to record a shortcut with ⌘, ⌃ or ⌥. Press Esc to cancel.",
+                                        "按快捷鍵欄位錄製，須包含 ⌘、⌃ 或 ⌥；按 Esc 取消。",
+                                        "点击快捷键栏进行录制，须包含 ⌘、⌃ 或 ⌥；按 Esc 取消。",
+                                        "欄をクリックして、⌘、⌃、⌥ のいずれかを含むキーを押してください。Esc でキャンセルできます。"))
+                        .font(.caption).foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
-                    Button(l10n.s.permissionOpenSettings) { permissions.requestAccessibility() }
+                    if translation.customShortcutUnavailable {
+                        Label(text.localized("This shortcut is unavailable or used by another app. Choose another combination.",
+                                             "此快捷鍵無法使用或已被其他 App 佔用，請選擇其他組合。",
+                                             "此快捷键不可用或已被其他 App 占用，请选择其他组合。",
+                                             "このショートカットは使用できないか、別のアプリで使われています。別の組み合わせを選んでください。"), systemImage: "exclamationmark.triangle")
+                            .font(.caption).fixedSize(horizontal: false, vertical: true)
+                            .accessibilityIdentifier("translationShortcutConflict")
+                    }
                 }
+                AccessibilityPermissionView(granted: permissions.accessibility, language: l10n.language,
+                                            openSettings: permissions.requestAccessibility)
                 Button(text.open) { translation.open() }
                 Divider()
                 Picker(text.chineseVoice, selection: Binding(
@@ -130,15 +169,15 @@ struct TranslationSettings: View {
                 }
                 Text(text.cacheCaption).font(.caption).foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
-                if translation.engine == .apple {
-                    Text(translation.privacyNotice).font(.caption).foregroundStyle(.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
             } else {
                 Text(text.osRequired).foregroundStyle(.secondary)
             }
         }
-        .task { await credentials.refresh() }
+        .task { permissions.refresh(); await credentials.refresh() }
+        .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
+            permissions.refresh()
+            translation.syncWithPreferences()
+        }
         .onDisappear { keyDraft = "" }
         .onChange(of: translation.engine) { _, _ in keyDraft = "" }
     }
@@ -150,6 +189,7 @@ struct TranslationSettings: View {
         case .removed: return text.keyRemoved
         case .failed: return text.keychainFailed
         case .invalid: return text.keyInvalid
+        case .exists: return text.keyExists
         }
     }
 }
