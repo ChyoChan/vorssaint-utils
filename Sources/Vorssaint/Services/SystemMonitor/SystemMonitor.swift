@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Vorssaint
 
+import AppKit
 import Combine
 import Darwin
 import Foundation
@@ -143,6 +144,10 @@ final class SystemMonitor: ObservableObject {
     private let queue = DispatchQueue(label: "com.vorssaint.utils.system-monitor", qos: .utility)
     private var timer: Timer?
     private var intervalSeconds = 2
+    private var scheduledIntervalSeconds = 2
+    private var lowPowerMode = ProcessInfo.processInfo.isLowPowerModeEnabled
+    private var screensSleeping = false
+    private var powerSubscriptions = Set<AnyCancellable>()
     private var panelClients = 0
     private var menuPanelNeeds: SystemMonitorPanelNeeds = .none
     private var notchVisible = false
@@ -243,6 +248,7 @@ final class SystemMonitor: ObservableObject {
         if PowerSampler.hasInternalBattery {
             installPowerSourceObserver()
         }
+        installPowerEnvironmentObservers()
         peripheralBatterySampler.onBluetoothRefresh = { [weak self] in
             DispatchQueue.main.async {
                 guard let self, self.peripheralSamplingEnabled else { return }
@@ -259,6 +265,37 @@ final class SystemMonitor: ObservableObject {
     }
 
     // MARK: - Lifecycle
+
+    private func installPowerEnvironmentObservers() {
+        NotificationCenter.default.publisher(for: .NSProcessInfoPowerStateDidChange)
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] _ in
+                guard let self else { return }
+                let lowPowerMode = ProcessInfo.processInfo.isLowPowerModeEnabled
+                guard self.lowPowerMode != lowPowerMode else { return }
+                self.lowPowerMode = lowPowerMode
+                self.powerEnvironmentDidChange()
+            }
+            .store(in: &powerSubscriptions)
+        for (name, sleeping) in [(NSWorkspace.screensDidSleepNotification, true),
+                                 (NSWorkspace.screensDidWakeNotification, false)] {
+            NSWorkspace.shared.notificationCenter.publisher(for: name)
+                .receive(on: DispatchQueue.main)
+                .sink { [weak self] _ in
+                    guard let self, self.screensSleeping != sleeping else { return }
+                    self.screensSleeping = sleeping
+                    self.powerEnvironmentDidChange()
+                }
+                .store(in: &powerSubscriptions)
+        }
+    }
+
+    private func powerEnvironmentDidChange() {
+        tickCount = 0
+        stopTimerIfIdle()
+        ensureTimer()
+        if shouldSample() { refresh(suppressImmediateGPU: true); scheduleDeferredGPURefreshIfNeeded() }
+    }
 
     /// The same system notification used by the reference battery monitor.
     /// It removes the normal background sampling delay after unplugging,
@@ -482,6 +519,10 @@ final class SystemMonitor: ObservableObject {
     /// independent surfaces cannot desync.
     private var fullMonitorVisible: Bool { panelClients > 0 }
 
+    private var samplingInForeground: Bool {
+        !screensSleeping && (fullMonitorVisible || menuPanelNeeds.any || notchDetailNeeds.any || notchVisible)
+    }
+
     private var shouldRun: Bool { fullMonitorVisible || menuPanelNeeds.any || notchDetailNeeds.any || notchVisible || notchAccessoryMonitoring || menuBarActive || alertsActive }
 
     private func shouldSample(defaults: UserDefaults = .standard) -> Bool {
@@ -611,6 +652,17 @@ final class SystemMonitor: ObservableObject {
             || menuPanelNeeds.connectedDevices
             || defaults.bool(forKey: DefaultsKey.menuBarConnectedDevices)
 
+        if screensSleeping {
+            // Displays consume no readings while asleep; alert rules still do.
+            plan = SamplingPlan()
+            plan.needCPU = alertCPU
+            plan.needMemory = alertMemory
+            plan.needDisk = alertDisk
+            plan.needPower = alertBattery
+            plan.needCPUTemperature = alertCPUTemperature
+            plan.needBatteryTemperature = alertBatteryTemperature
+        }
+
         // The hub gates whole metric families: an unavailable metric never
         // samples, no matter what is pinned, shown or alerting.
         func available(_ feature: AppFeature) -> Bool {
@@ -629,8 +681,8 @@ final class SystemMonitor: ObservableObject {
         // A pinned chip temperature only counts while that chip's metric
         // family is still available.
         plan.needChipTemperatureMenuBar =
-            (available(.monitorCPU) && defaults.bool(forKey: DefaultsKey.menuBarCPUTemperature))
-            || (available(.monitorGPU) && defaults.bool(forKey: DefaultsKey.menuBarGPUTemperature))
+            !screensSleeping && ((available(.monitorCPU) && defaults.bool(forKey: DefaultsKey.menuBarCPUTemperature))
+            || (available(.monitorGPU) && defaults.bool(forKey: DefaultsKey.menuBarGPUTemperature)))
         if !available(.monitorMemory) { plan.needMemory = false }
         if !available(.monitorNetwork) { plan.needNetwork = false }
         if !available(.monitorDisk) { plan.needDisk = false }
@@ -676,11 +728,13 @@ final class SystemMonitor: ObservableObject {
     /// onto the new grid or `tick % stride` could become unreachable.
     private func syncTimerCadence(plan: SamplingPlan) {
         lastSyncedPlan = plan
-        let foreground = fullMonitorVisible || menuPanelNeeds.any || notchDetailNeeds.any || notchVisible
+        let foreground = samplingInForeground
+        let intervalSeconds = MonitorSamplingPolicy.intervalSeconds(configured: self.intervalSeconds, lowPowerMode: lowPowerMode)
         let desired = MonitorSamplingPolicy.wakeTicks(for: Self.neededKinds(of: plan),
                                                       intervalSeconds: intervalSeconds,
                                                       foreground: foreground)
-        guard desired != scheduledWakeTicks else { return }
+        guard desired != scheduledWakeTicks || intervalSeconds != scheduledIntervalSeconds else { return }
+        scheduledIntervalSeconds = intervalSeconds
         scheduledWakeTicks = desired
         tickCount = MonitorSamplingPolicy.alignedTick(tickCount, wakeTicks: desired)
         if timer != nil {
@@ -704,7 +758,7 @@ final class SystemMonitor: ObservableObject {
     }
 
     private func startTimer() {
-        let cadenceSeconds = TimeInterval(intervalSeconds * scheduledWakeTicks)
+        let cadenceSeconds = TimeInterval(scheduledIntervalSeconds * scheduledWakeTicks)
         let t = Timer(timeInterval: cadenceSeconds, repeats: true) { [weak self] _ in
             self?.refresh()
         }
@@ -742,8 +796,8 @@ final class SystemMonitor: ObservableObject {
         syncTimerCadence(plan: plan)
         refreshInFlight = true
         let suppressGPUReadsUntil = self.suppressGPUReadsUntil
-        let foregroundSampling = fullMonitorVisible || menuPanelNeeds.any || notchDetailNeeds.any || notchVisible
-        let intervalSeconds = self.intervalSeconds
+        let foregroundSampling = samplingInForeground
+        let intervalSeconds = scheduledIntervalSeconds
         // Ticks advance by the timer's cadence so `tick % stride` keeps
         // measuring base intervals; mutated on main only, read by the queue
         // through the captured value.

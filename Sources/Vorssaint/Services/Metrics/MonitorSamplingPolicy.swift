@@ -31,6 +31,10 @@ enum MonitorSamplingKind: String {
 }
 
 enum MonitorSamplingPolicy {
+    static func intervalSeconds(configured: Int, lowPowerMode: Bool) -> Int {
+        max(lowPowerMode ? 5 : 1, configured)
+    }
+
     /// `forced` kinds sample on any tick: an event that changed them (a power
     /// source change) should not wait out a slow background stride.
     static func shouldSample(_ kind: MonitorSamplingKind,

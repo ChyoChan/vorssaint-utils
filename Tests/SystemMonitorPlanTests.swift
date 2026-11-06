@@ -5,7 +5,7 @@ import Foundation
 
 /// Runs the production sampling plan against scripted surfaces and features.
 enum SystemMonitorPlanTests {
-    enum PowerSampler { static let hasInternalBattery = false }
+    enum PowerSampler { static var hasInternalBattery = false }
 
     class Fixture {
         var menuPanelNeeds = SystemMonitorPanelNeeds.none
@@ -13,6 +13,7 @@ enum SystemMonitorPlanTests {
         var fullMonitorVisible = false
         var notchVisible = false
         var notchAccessoryMonitoring = false
+        var screensSleeping = false
         static var fanTelemetryAvailable: Bool { true }
     }
 
@@ -139,5 +140,48 @@ enum SystemMonitorPlanTests {
         suite.expect(monitor.currentPlan(defaults: defaults).needPeripheralBattery,
                      "the island's Battery detail still lists peripherals with the Power row hidden")
         monitor.notchDetailNeeds = .none
+        monitor.fullMonitorVisible = true
+        monitor.notchVisible = true
+        monitor.notchAccessoryMonitoring = true
+        for feature in [AppFeature.monitorCPU, .monitorGPU, .monitorMemory, .monitorNetwork, .monitorDisk,
+                        .monitorPower, .connectedDevices] {
+            defaults.set(true, forKey: feature.availabilityKey)
+        }
+        for key in [DefaultsKey.menuBarCPU, DefaultsKey.menuBarGPU, DefaultsKey.menuBarMemory,
+                    DefaultsKey.menuBarNetwork, DefaultsKey.menuBarDiskActivity, DefaultsKey.menuBarPower,
+                    DefaultsKey.menuBarPeripheralBattery, DefaultsKey.menuBarCPUTemperature,
+                    DefaultsKey.menuBarGPUTemperature, DefaultsKey.menuBarFanSpeed,
+                    DefaultsKey.menuBarConnectedDevices] {
+            defaults.set(true, forKey: key)
+        }
+        suite.expect(monitor.currentPlan(defaults: defaults).needGPUUsage,
+                     "awake displays retain their configured monitor readings")
+        monitor.screensSleeping = true
+        suite.expect(!monitor.currentPlan(defaults: defaults).any,
+                     "sleeping displays stop all presentation-only sampling, including retained panels and pinned metrics")
+        PowerSampler.hasInternalBattery = true
+        defer { PowerSampler.hasInternalBattery = false }
+        for key in [DefaultsKey.monitorAlertCPU, DefaultsKey.monitorAlertMemory, DefaultsKey.monitorAlertDisk,
+                    DefaultsKey.monitorAlertBattery, DefaultsKey.monitorAlertCPUTemperature,
+                    DefaultsKey.monitorAlertBatteryTemperature] {
+            defaults.set(true, forKey: key)
+        }
+        let sleepingAlerts = monitor.currentPlan(defaults: defaults)
+        suite.expect(sleepingAlerts.needCPU && sleepingAlerts.needMemory && sleepingAlerts.needDisk
+                     && sleepingAlerts.needPower && sleepingAlerts.needCPUTemperature && sleepingAlerts.needBatteryTemperature,
+                     "screen sleep preserves every enabled alert's necessary reading")
+        suite.expect(!sleepingAlerts.needGPUUsage && !sleepingAlerts.needNetwork && !sleepingAlerts.needFanSpeed
+                     && !sleepingAlerts.needCPUCores && !sleepingAlerts.needPeripheralBattery
+                     && !sleepingAlerts.needConnectedDevices && !sleepingAlerts.needChipTemperatureMenuBar,
+                     "sleeping alert monitoring does not inherit pinned display work or fast temperature cadence")
+        defaults.set(false, forKey: AppFeature.monitorCPU.availabilityKey)
+        suite.expect(!monitor.currentPlan(defaults: defaults).needCPU && !monitor.currentPlan(defaults: defaults).needCPUTemperature,
+                     "sleeping alerts still respect disabled metric families")
+        defaults.set(true, forKey: AppFeature.monitorCPU.availabilityKey)
+        monitor.screensSleeping = false
+        let waking = monitor.currentPlan(defaults: defaults)
+        suite.expect(waking.needGPUUsage && waking.needNetwork && waking.needFanSpeed
+                     && waking.needPeripheralBattery && waking.needConnectedDevices && waking.needChipTemperatureMenuBar,
+                     "waking restores presentation sampling without changing pinned metric preferences")
     }
 }

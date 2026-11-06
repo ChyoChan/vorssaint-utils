@@ -332,6 +332,13 @@ enum NetworkFeatureTests {
                     54,
                     "network monitoring stop shortens the lease instead of depending on balanced disappear events")
 
+        for configured in [1, 2, 5, 10] {
+            suite.expect(MonitorSamplingPolicy.intervalSeconds(configured: configured, lowPowerMode: false) == configured,
+                         "normal power preserves the configured monitor interval of \(configured) seconds")
+            suite.expect(MonitorSamplingPolicy.intervalSeconds(configured: configured, lowPowerMode: true) == max(5, configured),
+                         "low power caps monitor wake frequency while preserving slower configured intervals")
+        }
+
         suite.expect(MonitorSamplingPolicy.sampleStride(for: .cpu, intervalSeconds: 2, foreground: false) == 1,
                "monitor CPU stays responsive in menu-bar-only mode")
         suite.expect(MonitorSamplingPolicy.sampleStride(for: .disk, intervalSeconds: 2, foreground: false) == 5,
