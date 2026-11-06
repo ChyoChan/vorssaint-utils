@@ -2,6 +2,7 @@
 // Copyright (C) 2026 Vorssaint
 
 import AppKit
+import Combine
 
 enum TranslationTypingChecks {
     @MainActor static func run() {
@@ -11,7 +12,9 @@ enum TranslationTypingChecks {
                     DefaultsKey.translationRecentSourceLanguages, DefaultsKey.translationRecentTargetLanguages,
                     DefaultsKey.translationSourceTabs, DefaultsKey.translationTargetTabs,
                     DefaultsKey.translationGoogleUsage, DefaultsKey.translationGoogleUsageReminderEnabled,
-                    DefaultsKey.translationGoogleUsageReminderMonth, DefaultsKey.translationPDFLineBreakCleanup]
+                    DefaultsKey.translationGoogleUsageReminderMonth, DefaultsKey.translationPDFLineBreakCleanup,
+                    DefaultsKey.translationCustomShortcutEnabled, DefaultsKey.translationSpeechRate,
+                    "fixtureUnrelatedPreference"]
         let saved = keys.map { defaults.object(forKey: $0) }
         defaults.set(false, forKey: DefaultsKey.translationDoubleCopyEnabled)
         defaults.set(false, forKey: DefaultsKey.translationGoogleUsageReminderEnabled)
@@ -120,6 +123,36 @@ enum TranslationTypingChecks {
             drain()
             expect(service.engine == .apple && service.request == nil && delay.pending == 0,
                    "synchronizing a changed engine preference does not schedule translation")
+        }
+
+        fixture { service, delay in
+            defaults.set(false, forKey: DefaultsKey.translationCustomShortcutEnabled)
+            service.start()
+            defer { service.stop() }
+            drain()
+            var publications = 0
+            let observation = service.objectWillChange.sink { publications += 1 }
+            for index in 0..<100 {
+                defaults.set(index, forKey: "fixtureUnrelatedPreference")
+                NotificationCenter.default.post(name: UserDefaults.didChangeNotification, object: defaults)
+            }
+            defaults.set("apple", forKey: DefaultsKey.translationEngine)
+            NotificationCenter.default.post(name: UserDefaults.didChangeNotification, object: defaults)
+            drain()
+            expect(publications == 0,
+                   "100 unrelated writes and an unchanged engine produce no translation UI updates")
+            service.syncWithPreferences()
+            expect(publications == 0, "an explicit unchanged settings sync does not publish UI changes")
+            defaults.set("google", forKey: DefaultsKey.translationEngine)
+            NotificationCenter.default.post(name: UserDefaults.didChangeNotification, object: defaults)
+            wait("changed engine preference still reaches the service", until: { service.engine == .google })
+            let rate = service.speechRate == 0.4 ? 0.5 : 0.4
+            defaults.set(rate, forKey: DefaultsKey.translationSpeechRate)
+            NotificationCenter.default.post(name: UserDefaults.didChangeNotification, object: defaults)
+            wait("changed voice rate still reaches the service", until: { service.speechRate == rate })
+            expect(service.request == nil && delay.pending == 0,
+                   "preference notifications never submit translation text")
+            withExtendedLifetime(observation) {}
         }
 
         var cacheChecksFinished = false

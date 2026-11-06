@@ -101,7 +101,12 @@ final class TranslationService: NSObject, ObservableObject, NSWindowDelegate, AV
             self?.syncWithPreferences()
         }.store(in: &subscriptions)
         NotificationCenter.default.publisher(for: UserDefaults.didChangeNotification)
-            .receive(on: DispatchQueue.main).sink { [weak self] _ in self?.syncWithPreferences() }
+            .receive(on: DispatchQueue.main)
+            .map { _ in Self.preferenceValues() }
+            .prepend(Self.preferenceValues())
+            .removeDuplicates()
+            .dropFirst()
+            .sink { [weak self] _ in self?.syncWithPreferences() }
             .store(in: &subscriptions)
         NSWorkspace.shared.notificationCenter.publisher(for: NSWorkspace.sessionDidResignActiveNotification)
             .receive(on: DispatchQueue.main).sink { [weak self] _ in
@@ -113,6 +118,20 @@ final class TranslationService: NSObject, ObservableObject, NSWindowDelegate, AV
             .receive(on: DispatchQueue.main).sink { [weak self] _ in self?.googleCredentialsDidChange() }
             .store(in: &subscriptions)
         syncWithPreferences()
+    }
+
+    private static func preferenceValues() -> NSDictionary {
+        let keys = [DefaultsKey.translationDoubleCopyEnabled, DefaultsKey.translationCustomShortcutEnabled,
+                    DefaultsKey.translationShortcut, DefaultsKey.translationEngine,
+                    DefaultsKey.translationRecentSourceLanguages, DefaultsKey.translationRecentTargetLanguages,
+                    DefaultsKey.translationSourceTabs, DefaultsKey.translationTargetTabs,
+                    DefaultsKey.translationChineseVoice, DefaultsKey.translationSpeechVoices,
+                    DefaultsKey.translationSpeechRate, DefaultsKey.translationPopupWidth,
+                    DefaultsKey.translationGoogleUsage, DefaultsKey.translationGoogleUsageReminderEnabled,
+                    DefaultsKey.translationGoogleUsageReminderMonth]
+        return NSDictionary(dictionary: keys.reduce(into: [String: Any]()) { values, key in
+            values[key] = UserDefaults.standard.object(forKey: key)
+        })
     }
 
     func syncWithPreferences() {
@@ -133,16 +152,17 @@ final class TranslationService: NSObject, ObservableObject, NSWindowDelegate, AV
         if voice != chineseVoice || selections != speechVoiceSelections || rate != speechRate {
             stopSpeech()
             chineseVoice = voice
-            speechVoiceSelections = selections
-            speechRate = rate
+            if selections != speechVoiceSelections { speechVoiceSelections = selections }
+            if rate != speechRate { speechRate = rate }
         }
         applyPopupAppearance()
         checkGoogleUsageReminder()
         let supported: Bool
         if #available(macOS 15.0, *) { supported = true } else { supported = false }
         let customEnabled = supported && UserDefaults.standard.bool(forKey: DefaultsKey.translationCustomShortcutEnabled)
-        customShortcutUnavailable = !customHotKey.update(shortcut:
+        let shortcutUnavailable = !customHotKey.update(shortcut:
             customEnabled && !recordingShortcut && AXIsProcessTrusted() ? TranslationShortcut.load(from: .standard) : nil)
+        if shortcutUnavailable != customShortcutUnavailable { customShortcutUnavailable = shortcutUnavailable }
         guard enabled, supported else {
             stopListening()
             // Unrelated preference writes must not close the manually opened

@@ -69,6 +69,8 @@ Google usage reminder is enabled by default in the same settings section. At 450
 
 ## Verification
 
+The typing fixture also verifies that unrelated and unchanged preference notifications do not publish translation UI updates, while changed engine and voice settings still apply without submitting text.
+
 Run `./build.sh --test-suite=translation --test-suite=clipboard --test-suite=preferences --test-suite=mixer --test-suite=settings --test-suite=keep-awake`.
 
 Run `zsh Tests/TranslationDragIntegrationTests.sh --ui-parity` to compile the native fixture once and sequentially check automatic typing, segmented engines, stable language tabs, initial scrolling, speech lifecycle and usage. The fixture uses its own text, preference keys, key loader and captured speech; it never reads the clipboard, calls a paid API or plays audio. Optional `--render-languages=/absolute/existing/temp-directory`, `--render-scroll=...` and `--render-speech=...` save native compact/editor fixtures in both appearances and narrow widths. The engine checks send events only to transparent, offscreen fixture windows, without a system event tap.
