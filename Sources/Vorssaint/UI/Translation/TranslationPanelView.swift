@@ -327,14 +327,10 @@ struct TranslationPanelView: View {
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .accessibilityLabel(compact ? text.title : text.result)
             .onAppear {
-                scrollToTranslation(proxy, compact: compact)
-                // The initial fitted-panel resize can follow the first target layout.
+                // Wait an extra layout turn for the initial fitted-panel resize.
                 DispatchQueue.main.async { scrollToTranslation(proxy, compact: compact) }
             }
             .onChange(of: model.output) { _, _ in scrollToTranslation(proxy, compact: compact) }
-            .onChange(of: model.busy) { _, busy in
-                if !busy { scrollToTranslation(proxy, compact: compact) }
-            }
         }
     }
 

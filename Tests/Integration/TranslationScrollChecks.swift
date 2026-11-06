@@ -35,7 +35,11 @@ enum TranslationScrollChecks {
         defaults.set(400.0, forKey: DefaultsKey.translationPopupWidth)
         defaults.set(20.0, forKey: DefaultsKey.translationPopupFontSize)
         defaults.set(false, forKey: DefaultsKey.translationDoubleCopyEnabled)
-        let service = TranslationService(speechSynthesizer: ScrollSpeechSynthesizer())
+        let service = TranslationService(speechSynthesizer: ScrollSpeechSynthesizer(),
+            googleTranslation: { _ in
+                try await Task.sleep(nanoseconds: 60_000_000_000)
+                throw CancellationError()
+            })
         defer { service.close() }
         var failures = 0
         func expect(_ value: Bool, _ name: String) {
@@ -76,8 +80,7 @@ enum TranslationScrollChecks {
         func complete(_ output: String) {
             // Each render intentionally seeds a different engine result for the same text.
             service.clearTranslationCache()
-            // The Google fixture's key loader always returns nil. Complete in this
-            // turn before its task runs, so neither HTTP nor real Apple translation starts.
+            // The injected client never loads credentials or submits HTTP requests.
             service.translate()
             guard let request = service.request else { expect(false, "fixture request is created"); return }
             service.finish(request.id, result: .success(output))
@@ -133,6 +136,27 @@ enum TranslationScrollChecks {
         expect(long.0 > initial.top + 60 && long.1 > 100,
                "a long translation opens near its beginning instead of scrolling to the document bottom")
         render("compact-long-result-start")
+        defaults.set(630.0, forKey: DefaultsKey.translationPopupWidth)
+        service.applyPopupAppearance()
+        pump()
+        expect(resultScroll().map { offsets($0).top > 100 && offsets($0).bottom > 100 } ?? false,
+               "resizing a long result still shows its beginning after adaptive layout settles")
+        defaults.set(400.0, forKey: DefaultsKey.translationPopupWidth)
+        service.applyPopupAppearance()
+        service.clearTranslationCache()
+        service.translate()
+        guard let delayed = service.request else {
+            print("FAIL: delayed scroll fixture creates a request"); exit(1)
+        }
+        pump()
+        expect(service.busy && (resultScroll().map { offsets($0).top > 100 } ?? false),
+               "a pending translation remains visible below the long original")
+        service.finish(delayed.id, result: .success("A delayed translation becomes visible after loading completes."))
+        pump()
+        expect(resultScroll().map { offsets($0).top > 100 && abs(offsets($0).bottom) < 12 } ?? false,
+               "asynchronous completion scrolls to its result after the loading view changes size")
+        complete(String(repeating: "A long translated passage starts here rather than at its final line.\n", count: 35))
+        pump()
         service.open(.editor)
         pump()
         expect(resultScroll().map { abs(offsets($0).top) < 4 && offsets($0).bottom > 100 } ?? false,
