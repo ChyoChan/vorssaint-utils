@@ -36,8 +36,10 @@ trap cleanup EXIT
 trap 'exit 1' INT TERM HUP
 
 # Flags: --dev builds the local-only "Vorssaint (Developer)" variant (its own
-# bundle id, so it coexists with the official app); --install puts it in /Applications.
+# bundle id, so it coexists with the official app); --optimized enables -O for
+# that variant; --install puts it in /Applications.
 DEV=0
+OPTIMIZED=0
 INSTALL=0
 TEST=0
 TEST_LIST_ONLY=0
@@ -45,12 +47,18 @@ TEST_ARGS=()
 for arg in "$@"; do
     case "$arg" in
         --dev)     DEV=1 ;;
+        --optimized) OPTIMIZED=1 ;;
         --install) INSTALL=1 ;;
         --test)    TEST=1 ;;
         --test-suite=*) TEST=1; TEST_ARGS+=("--suite=${arg#*=}") ;;
         --list-tests) TEST=1; TEST_LIST_ONLY=1; TEST_ARGS+=(--list) ;;
     esac
 done
+
+if (( OPTIMIZED && ! DEV )); then
+    print -u2 '--optimized requires --dev.'
+    exit 2
+fi
 
 if (( TEST && ! TEST_LIST_ONLY )); then
     TEST_STATUS_RUN_ID="$(python3 Tools/developer_build_status.py begin "${TEST_ARGS[@]}")"
@@ -63,6 +71,10 @@ if (( DEV )); then
     BUILD_VARIANT_FLAGS=(-D VORSSAINT_DEVELOPMENT)
     APP_OPTIMIZATION_FLAGS=(-Onone)
     BUILD_CONFIGURATION="debug"
+    if (( OPTIMIZED )); then
+        APP_OPTIMIZATION_FLAGS=(-O)
+        BUILD_CONFIGURATION="optimized developer"
+    fi
 else
     APP_NAME="Vorssaint"
     EXECUTABLE="Vorssaint"
@@ -618,6 +630,7 @@ if (( TEST )); then
         ./Tests/PreferenceCleanupTests.sh || test_status=1
         ./Tests/UninstallSpacesTests.sh || test_status=1
         ./Tests/DeveloperInstallIsolationTests.sh || test_status=1
+        zsh Tests/DeveloperBuildModeTests.sh || test_status=1
         zsh Tests/ComponentSigningTests.sh || test_status=1
         python3 Tests/DeveloperBuildStatusToolTests.py || test_status=1
     fi
