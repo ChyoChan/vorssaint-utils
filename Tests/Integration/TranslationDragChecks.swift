@@ -8,7 +8,10 @@ import SwiftUI
 // Only unrelated dependencies are stubbed. The real TranslationService, panel,
 // SwiftUI content and AppKit event monitors are compiled by the companion script.
 // Never starts a translation engine, reads the clipboard, or loads a key.
-enum AppLanguage: String { case enUS = "en-US", zhHK = "zh-HK", zhTW = "zh-TW", zhHans = "zh-Hans" }
+enum AppLanguage: String {
+    case enUS = "en-US", zhHK = "zh-HK", zhTW = "zh-TW", zhHans = "zh-Hans", ja = "ja"
+    func formattingLocale() -> Locale { Locale(identifier: rawValue) }
+}
 final class L10n: ObservableObject {
     static let shared = L10n()
     @Published var language: AppLanguage = .zhHK

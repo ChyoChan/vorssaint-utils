@@ -60,7 +60,13 @@ final class GoogleTranslationClient {
 
     deinit { session?.invalidateAndCancel() }
 
-    static func languageCode(_ identifier: String) -> String { identifier == "zh-Hant" ? "zh-TW" : identifier }
+    static func languageCode(_ identifier: String) -> String {
+        switch identifier {
+        case "zh-Hant": return "zh-TW"
+        case "zh-Hans": return "zh-CN"
+        default: return identifier
+        }
+    }
 
     static func makeRequest(texts: [String], source: String?, target: String, key: String) throws -> URLRequest {
         let key = try TranslationAPIKey.normalized(key)

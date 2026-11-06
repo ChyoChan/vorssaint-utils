@@ -2,6 +2,7 @@
 // Copyright (C) 2026 Vorssaint
 
 import Foundation
+import NaturalLanguage
 
 enum TranslationSpeechTests {
     static func run(_ suite: TestSuite) {
@@ -48,6 +49,23 @@ enum TranslationSpeechTests {
         suite.expect(TranslationSpeechLanguage.preferred(for: "This complete English sentence has enough context for language detection.",
                      language: "auto", chineseVoice: "yue-HK") == "en-US",
                      "automatic source language uses local language recognition")
+        for word in ["word", "family", "CPU", "GDP", "MapReduce"] {
+            suite.expect(TranslationSpeechLanguage.preferred(for: word, language: "auto", chineseVoice: "yue-HK") == "en-US",
+                         "ambiguous short ASCII words use the same local English fallback for translation and speech")
+        }
+        let detectionFixtures: [(String, [NLLanguage: Double], String?)] = [
+            ("word", [.dutch: 0.46, .english: 0.28], "en"),
+            ("bonjour", [.french: 0.99], "fr"),
+            ("こんにちは", [.japanese: 0.99], "ja"),
+            ("家庭", [.traditionalChinese: 0.45, .simplifiedChinese: 0.44, .japanese: 0.11], "zh-Hant"),
+            ("家庭", [.traditionalChinese: 0.3, .simplifiedChinese: 0.6, .japanese: 0.1], "zh-Hans"),
+            ("銀行", [.japanese: 0.57, .traditionalChinese: 0.43], nil),
+            ("12345", [.english: 1], nil),
+        ]
+        for (text, hypotheses, expected) in detectionFixtures {
+            suite.expect(TranslationLanguageDetection.source(for: text, hypotheses: hypotheses) == expected,
+                         "local detection respects confidence, Chinese script and nonletter ambiguity")
+        }
         suite.expect(TranslationSpeechLanguage.preferred(for: "", language: "auto", chineseVoice: "yue-HK") == nil,
                      "unrecognized source text has no guessed voice")
         let languages = ["en-GB", "zh-CN", "zh-HK", "ja-JP", "en-US", "yue-HK", "zh-TW"]

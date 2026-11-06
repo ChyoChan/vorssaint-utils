@@ -19,6 +19,7 @@ struct TranslationLanguageSelector: View {
         let tabs = HStack(spacing: 0) {
             ForEach(recentLanguages, id: \.self) { language in
                 languageTab(language)
+                    .id(language)
             }
         }
         .overlayPreferenceValue(TranslationLanguageBounds.self) { bounds in
@@ -57,7 +58,17 @@ struct TranslationLanguageSelector: View {
             HStack(spacing: 4) { tabs; menu }
                 .fixedSize(horizontal: true, vertical: false)
             HStack(spacing: 4) {
-                ScrollView(.horizontal, showsIndicators: false) { tabs }
+                ScrollViewReader { proxy in
+                    ScrollView(.horizontal, showsIndicators: false) { tabs }
+                        .onAppear {
+                            DispatchQueue.main.async { proxy.scrollTo(selection) }
+                        }
+                        .onChange(of: selectedLanguage) { _, language in
+                            withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.22)) {
+                                proxy.scrollTo(language)
+                            }
+                        }
+                }
                 menu
             }
         }

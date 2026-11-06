@@ -14,8 +14,8 @@ import SwiftUI
 final class TranslationService: NSObject, ObservableObject, NSWindowDelegate, AVSpeechSynthesizerDelegate {
     static let shared = TranslationService()
     @Published var input = ""
-    @Published var source = TranslationLanguageDefaults.source
-    @Published var target = TranslationLanguageDefaults.target
+    @Published var source = TranslationRecentLanguages.load(forSource: true).first ?? TranslationLanguageDefaults.source
+    @Published var target = TranslationRecentLanguages.load(forSource: false).first ?? TranslationLanguageDefaults.target
     @Published private(set) var recentSourceLanguages = TranslationRecentLanguages.tabs(forSource: true)
     @Published private(set) var recentTargetLanguages = TranslationRecentLanguages.tabs(forSource: false)
     @Published private(set) var output = ""
@@ -508,13 +508,21 @@ final class TranslationService: NSObject, ObservableObject, NSWindowDelegate, AV
         let originalSource = source
         source = target
         target = originalSource
-        rememberLanguage(source, isSource: true)
-        rememberLanguage(target, isSource: false)
         if !output.isEmpty { input = output }
         languagesDidChange()
     }
 
+    private func rememberLanguages() {
+        TranslationRecentLanguages.record(source, forSource: true)
+        TranslationRecentLanguages.record(target, forSource: false)
+        let sources = TranslationRecentLanguages.tabs(forSource: true)
+        let targets = TranslationRecentLanguages.tabs(forSource: false)
+        if sources != recentSourceLanguages { recentSourceLanguages = sources }
+        if targets != recentTargetLanguages { recentTargetLanguages = targets }
+    }
+
     private func languagesDidChange() {
+        rememberLanguages()
         inputDidChange()
         if !input.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { translate() }
     }
@@ -533,8 +541,7 @@ final class TranslationService: NSObject, ObservableObject, NSWindowDelegate, AV
         stopSpeech()
         do { _ = try TranslationTextPlan.validate(input) }
         catch { message = inputMessage(error); return }
-        rememberLanguage(source, isSource: true)
-        rememberLanguage(target, isSource: false)
+        rememberLanguages()
         cloudTask?.cancel()
         cloudTask = nil
         generation.advance()
@@ -546,8 +553,13 @@ final class TranslationService: NSObject, ObservableObject, NSWindowDelegate, AV
         copyToken = UUID()
         let prepared = TranslationLineBreakCleanup.prepare(input, enabled:
             UserDefaults.standard.bool(forKey: DefaultsKey.translationPDFLineBreakCleanup))
-        let pending = TranslationRequest(text: prepared, source: source == "auto" ? nil : source,
-                                         target: target, engine: engine)
+        var resolvedSource: String? = source == "auto" ? nil : source
+        if source == "auto", engine == .apple {
+            let detected = TranslationLanguageDetection.source(for: prepared)
+            // Leave same-language inference to Apple; an ambiguous word must not be silently skipped.
+            if detected != target { resolvedSource = detected }
+        }
+        let pending = TranslationRequest(text: prepared, source: resolvedSource, target: target, engine: engine)
         if let cached = resultCache.value(for: pending) {
             request = nil
             output = cached

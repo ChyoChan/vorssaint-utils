@@ -2,7 +2,6 @@
 // Copyright (C) 2026 Vorssaint
 
 import Foundation
-import NaturalLanguage
 
 enum TranslationSpeechPart: Equatable {
     case original, translation, preview(String)
@@ -56,7 +55,7 @@ enum TranslationSpeechLanguage {
     }
 
     static func preferred(for text: String, language: String, chineseVoice: String) -> String? {
-        let detected = language == "auto" ? NLLanguageRecognizer.dominantLanguage(for: text)?.rawValue : language
+        let detected = language == "auto" ? TranslationLanguageDetection.source(for: text) : language
         guard let detected else { return nil }
         switch detected.split(separator: "-").first {
         case "zh", "yue": return self.chineseVoice(chineseVoice)

@@ -22,6 +22,7 @@ struct TranslationPanelView: View {
                 editorContent
             }
         }
+        .environment(\.locale, l10n.language.formattingLocale())
         .background(Color(nsColor: .windowBackgroundColor))
         .ignoresSafeArea()
         .background {

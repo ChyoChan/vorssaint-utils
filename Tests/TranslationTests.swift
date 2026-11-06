@@ -18,7 +18,8 @@ enum TranslationTests {
         suite.expect(TranslationRequest(text: "Hello", source: "en", target: "zh-Hant").engine == .apple,
                      "existing translation requests stay local by default")
         suite.expect(GoogleTranslationClient.languageCode("zh-Hant") == "zh-TW" &&
-                     GoogleTranslationClient.languageCode("ja") == "ja", "Google maps Traditional Chinese to its NMT code")
+                     GoogleTranslationClient.languageCode("ja") == "ja" &&
+                     GoogleTranslationClient.languageCode("zh-Hans") == "zh-CN", "Google maps both Chinese scripts to distinct NMT codes")
         suite.expect((try? TranslationAPIKey.normalized("  fixture_key-123\n")) == "fixture_key-123",
                      "key entry trims surrounding copy whitespace")
         for value in ["", " \n", "key with spaces", "key\r\nInjected: value", "金鑰", String(repeating: "x", count: 257)] {
@@ -34,19 +35,19 @@ enum TranslationTests {
                 suite.expect(!strings.googleError(error).isEmpty, "every Google error has actionable UI copy")
             }
         }
-        suite.expect(TranslationLanguageDefaults.languages == ["zh-Hant", "en", "ja"],
-                     "both language pickers expose only Traditional Chinese, English and Japanese")
-        suite.expect(TranslationRecentLanguages.list(nil) == ["en", "ja", "zh-Hant"],
+        suite.expect(TranslationLanguageDefaults.languages == ["zh-Hant", "en", "ja", "zh-Hans"],
+                     "both language pickers support both Chinese scripts, English and Japanese")
+        suite.expect(TranslationRecentLanguages.list(nil) == ["zh-Hant", "en", "ja", "zh-Hans"],
                      "new language tabs use the reference order before any language has been used")
-        suite.expect(TranslationRecentLanguages.list(["auto", "ko", "ja", "ja", "zh-Hans", "en"]) == ["ja", "en", "zh-Hant"],
+        suite.expect(TranslationRecentLanguages.list(["auto", "ko", "ja", "ja", "zh-Hans", "en"]) == ["ja", "zh-Hans", "en", "zh-Hant"],
                      "recent language tabs remove duplicates, automatic detection and unavailable languages")
         var recent = TranslationRecentLanguages.list(nil)
         for language in ["ja", "zh-Hant", "en", "ja"] {
             recent = TranslationRecentLanguages.recording(language, in: recent)
-            suite.expect(recent.first == language && recent.count == 3 && Set(recent).count == 3,
+            suite.expect(recent.first == language && recent.count == 4 && Set(recent).count == 4,
                          "using a language promotes it without duplicating or dropping quick choices")
         }
-        suite.expect(recent == ["ja", "en", "zh-Hant"] &&
+        suite.expect(recent == ["ja", "en", "zh-Hant", "zh-Hans"] &&
                      TranslationRecentLanguages.recording("auto", in: recent) == recent &&
                      TranslationRecentLanguages.recording("fr", in: recent) == recent,
                      "recent language order reflects usage while unsupported selections cannot enter history")
@@ -206,8 +207,8 @@ enum TranslationTests {
                      "stable language positions survive reloading their preference domain")
         TranslationRecentLanguages.record("auto", forSource: true, in: defaults)
         let automatic = TranslationRecentLanguages.tabs(forSource: true, from: defaults)
-        suite.expect(automatic.first == "auto" && automatic.count == 3 && Set(automatic).count == 3,
-                     "an unseen source choice refreshes the three tabs without duplicates")
+        suite.expect(automatic == sources && automatic.count == 4 && Set(automatic).count == 4,
+                     "automatic detection remains in its stable fourth source slot")
         suite.expect(TranslationRecentLanguages.load(forSource: true, from: defaults).first == "auto",
                      "source automatic detection retains its actual most-recent-use position")
         TranslationRecentLanguages.record("auto", forSource: false, in: defaults)
@@ -249,6 +250,10 @@ enum TranslationTests {
             let automatic = try GoogleTranslationClient.makeRequest(texts: ["Hello"], source: nil, target: "ja", key: fakeKey)
             let autoBody = try JSONSerialization.jsonObject(with: automatic.httpBody!) as! [String: Any]
             suite.expect(autoBody["source"] == nil, "auto detection omits source rather than sending auto as a language code")
+            let simplified = try GoogleTranslationClient.makeRequest(texts: ["简体文字"], source: "zh-Hans", target: "zh-Hant", key: fakeKey)
+            let scriptBody = try JSONSerialization.jsonObject(with: simplified.httpBody!) as! [String: Any]
+            suite.expect(scriptBody["source"] as? String == "zh-CN" && scriptBody["target"] as? String == "zh-TW",
+                         "Simplified source and Traditional target are encoded independently")
         } catch { suite.expect(false, "Google fake transport pipeline succeeds") }
 
         for (status, expected) in [(400, GoogleTranslationError.invalidRequest), (401, .invalidKey), (403, .denied),

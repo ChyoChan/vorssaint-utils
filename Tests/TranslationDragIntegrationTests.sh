@@ -31,6 +31,7 @@ swiftc -parse-as-library -target "$translation_drag_arch-apple-macos15.0" -sdk "
     Sources/Vorssaint/Services/Translation/TranslationSupport.swift \
     Sources/Vorssaint/Services/Translation/TranslationSpeechSupport.swift \
     Sources/Vorssaint/Services/Translation/TranslationLineBreakCleanup.swift \
+    Sources/Vorssaint/Services/Translation/TranslationLanguageDetection.swift \
     Sources/Vorssaint/Services/Translation/GoogleTranslationClient.swift \
     Sources/Vorssaint/Services/Translation/GoogleTranslationUsageStore.swift \
     Sources/Vorssaint/Core/TranslationStrings.swift \

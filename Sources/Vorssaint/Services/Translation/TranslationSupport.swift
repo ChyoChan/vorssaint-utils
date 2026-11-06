@@ -11,20 +11,20 @@ enum TranslationEngine: String, CaseIterable {
 enum TranslationLanguageDefaults {
     static let source = "en"
     static let target = "zh-Hant"
-    static let languages = ["zh-Hant", "en", "ja"]
+    static let languages = ["zh-Hant", "en", "ja", "zh-Hans"]
 }
 
 enum TranslationRecentLanguages {
-    static let fallback = ["en", "ja", "zh-Hant"]
+    static let fallback = ["en", "ja", "zh-Hant", "auto"]
 
     static func list(_ saved: [String]?, forSource: Bool = false) -> [String] {
         var result: [String] = []
-        for language in (saved ?? []) + fallback {
+        for language in (saved ?? []) + (forSource ? fallback : TranslationLanguageDefaults.languages) {
             if (TranslationLanguageDefaults.languages.contains(language) || (forSource && language == "auto")),
                !result.contains(language) {
                 result.append(language)
             }
-            if result.count == 3 { break }
+            if result.count == 4 { break }
         }
         return result
     }

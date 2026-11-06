@@ -40,8 +40,9 @@ enum TranslationLanguageChecks {
                TranslationRecentLanguages.load(forSource: false).first == "zh-Hant",
                "selecting the current target records usage without moving its tab")
         service.setSource("auto")
-        expect(service.recentSourceLanguages.first == "auto" && !service.recentTargetLanguages.contains("auto"),
-               "an unseen automatic source choice becomes visible only on the source side")
+        expect(service.recentSourceLanguages.contains("auto") && service.recentSourceLanguages.count == 4 &&
+               TranslationRecentLanguages.load(forSource: true).first == "auto" && !service.recentTargetLanguages.contains("auto"),
+               "automatic source use is remembered among four tabs and never appears on the target side")
         let reopened = TranslationService()
         expect(reopened.recentSourceLanguages == service.recentSourceLanguages &&
                reopened.recentTargetLanguages == service.recentTargetLanguages, "both language histories survive a service restart")
